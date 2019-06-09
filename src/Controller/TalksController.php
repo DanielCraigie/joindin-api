@@ -210,7 +210,7 @@ class TalksController extends BaseTalkController
         }
     }
 
-    public function deleteTalkStarred(Request $request, PDO $db)
+    public function removeStarFromTalk(Request $request, PDO $db)
     {
         $this->checkLoggedIn($request);
 
@@ -219,8 +219,8 @@ class TalksController extends BaseTalkController
         $talk_mapper->setUserNonStarred($talk_id, $request->user_id);
 
         $view = $request->getView();
-        $view->setHeader('Location', $request->base . $request->path_info);
-        $view->setResponseCode(200);
+        $view->setHeader('Content-Length', 0);
+        $view->setResponseCode(205);
     }
 
     public function deleteTalk(Request $request, PDO $db)
@@ -532,7 +532,7 @@ class TalksController extends BaseTalkController
         // When the language doesn't exist, the talk will not be found
         $language_mapper = new LanguageMapper($db, $request);
         if (!$language_mapper->isLanguageValid($talk['language'])) {
-            throw new Exception("The language '{$talk['type']}' is unknown", 400);
+            throw new Exception("The language '{$talk['language']}' is unknown", 400);
         }
 
         $talk['duration'] = filter_var(
