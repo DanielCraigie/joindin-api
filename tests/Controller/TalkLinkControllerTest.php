@@ -5,10 +5,15 @@ namespace Joindin\Api\Test\Controller;
 use Exception;
 use Joindin\Api\Controller\TalkLinkController;
 use Joindin\Api\Request;
-use JoindinTest\Inc\mockPDO;
+use Joindin\Api\Test\Mock\mockPDO;
+use Teapot\StatusCode\Http;
 
-class TalkLinkControllerTest extends TalkBase
+final class TalkLinkControllerTest extends TalkBase
 {
+    private $talks_controller;
+    private $request;
+    private $db;
+
     /**
      * Test sending delete link where the link id is not found
      */
@@ -16,7 +21,7 @@ class TalkLinkControllerTest extends TalkBase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Talk Link ID not found');
-        $this->expectExceptionCode(404);
+        $this->expectExceptionCode(Http::NOT_FOUND);
 
         $this->makeRequest(
             'http://api.dev.joind.in/v2.1/talks/3/links/1234',
@@ -29,7 +34,6 @@ class TalkLinkControllerTest extends TalkBase
             ->expects($this->once())
             ->method("removeTalkLink")
             ->willReturn(false);
-
 
         $this->assertTrue(
             $this->talks_controller->removeTalkLink(
@@ -71,7 +75,7 @@ class TalkLinkControllerTest extends TalkBase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('You do not have permission to add links to this talk');
-        $this->expectExceptionCode(403);
+        $this->expectExceptionCode(Http::FORBIDDEN);
 
         $this->makeRequest(
             'http://api.dev.joind.in/v2.1/talks/3/links/1234',
@@ -109,7 +113,7 @@ class TalkLinkControllerTest extends TalkBase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('ID not found');
-        $this->expectExceptionCode(404);
+        $this->expectExceptionCode(Http::NOT_FOUND);
 
         $this->makeRequest(
             'http://api.dev.joind.in/v2.1/talks/3/links/1234',
@@ -156,7 +160,7 @@ class TalkLinkControllerTest extends TalkBase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Missing required fields URL OR Display Name');
-        $this->expectExceptionCode(400);
+        $this->expectExceptionCode(Http::BAD_REQUEST);
 
         $this->makeRequest(
             'http://api.dev.joind.in/v2.1/talks/3/links/1234',
@@ -175,7 +179,7 @@ class TalkLinkControllerTest extends TalkBase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('The Link has not been inserted');
-        $this->expectExceptionCode(400);
+        $this->expectExceptionCode(Http::BAD_REQUEST);
 
         $this->makeRequest(
             'http://api.dev.joind.in/v2.1/talks/3/links/1234',
@@ -223,7 +227,7 @@ class TalkLinkControllerTest extends TalkBase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Update of Link ID Failed');
-        $this->expectExceptionCode(500);
+        $this->expectExceptionCode(Http::INTERNAL_SERVER_ERROR);
 
         $this->makeRequest(
             'http://api.dev.joind.in/v2.1/talks/3/links/1234',

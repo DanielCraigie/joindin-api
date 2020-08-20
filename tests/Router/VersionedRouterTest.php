@@ -6,15 +6,15 @@ use Exception;
 use Joindin\Api\Request;
 use Joindin\Api\Router\VersionedRouter;
 use PHPUnit\Framework\TestCase;
+use Teapot\StatusCode\Http;
 
 /**
  * A class to test VersionedRouter
  *
  * @covers \Joindin\Api\Router\VersionedRouter
  */
-class VersionedRouterTest extends TestCase
+final class VersionedRouterTest extends TestCase
 {
-
     /**
      * DataProvider for testGetRoute
      *
@@ -112,7 +112,7 @@ class VersionedRouterTest extends TestCase
                 'expectedController'    => 'N/A',
                 'expectedAction'        => 'N/A',
                 'routeParams'           => [],
-                'expectedExceptionCode' => 415
+                'expectedExceptionCode' => Http::METHOD_NOT_ALLOWED
             ],
             [ // #5
                 'version'               => '2.1',
@@ -134,7 +134,7 @@ class VersionedRouterTest extends TestCase
                 'expectedController'    => 'N/A',
                 'expectedAction'        => 'N/A',
                 'routeParams'           => [],
-                'expectedExceptionCode' => 404
+                'expectedExceptionCode' => Http::NOT_FOUND
             ]
         ];
     }
@@ -165,6 +165,7 @@ class VersionedRouterTest extends TestCase
     ) {
         $request = new Request([], ['REQUEST_URI' => $url, 'REQUEST_METHOD' => $method]);
         $router  = new VersionedRouter($version, [], $rules);
+
         try {
             $route = $router->getRoute($request);
         } catch (Exception $ex) {

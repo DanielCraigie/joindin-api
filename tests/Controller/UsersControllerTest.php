@@ -4,31 +4,34 @@ namespace Joindin\Api\Test\Controller;
 
 use Exception;
 use Joindin\Api\Controller\UsersController;
+use Joindin\Api\Exception\AuthenticationException;
+use Joindin\Api\Exception\AuthorizationException;
 use Joindin\Api\Model\OAuthModel;
+use Joindin\Api\Model\TalkCommentMapper;
 use Joindin\Api\Model\UserMapper;
 use Joindin\Api\Request;
 use Joindin\Api\Service\UserRegistrationEmailService;
 use Joindin\Api\View\ApiView;
 use Joindin\Api\View\JsonView;
-use JoindinTest\Inc\mockPDO;
+use Joindin\Api\Test\Mock\mockPDO;
 use PDO;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Teapot\StatusCode\Http;
 
-class UsersControllerTest extends TestCase
+final class UsersControllerTest extends TestCase
 {
-
     /**
      * Ensures that if the deleteUser method is called and no user_id is set,
      * an exception is thrown
      *
      * @return void
      */
-    public function testDeleteUserWithNoUserIdThrowsException()
+    public function testDeleteUserWithoutBeingLoggedInThrowsException()
     {
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('You must be logged in to delete data');
-        $this->expectExceptionCode(401);
+        $this->expectExceptionCode(Http::UNAUTHORIZED);
 
         $request = new Request([], ['REQUEST_URI' => "http://api.dev.joind.in/v2.1/users/3", 'REQUEST_METHOD' => 'DELETE']);
 
@@ -50,22 +53,22 @@ class UsersControllerTest extends TestCase
     {
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('You do not have permission to do that');
-        $this->expectExceptionCode(403);
+        $this->expectExceptionCode(Http::FORBIDDEN);
 
         $request = new Request([], ['REQUEST_URI' => "http://api.dev.joind.in/v2.1/users/3", 'REQUEST_METHOD' => 'DELETE']);
         $request->user_id = 2;
         $usersController = new UsersController();
 
-
         $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
 
         $userMapper = $this->getMockBuilder(UserMapper::class)
-            ->setConstructorArgs([$db,$request])
+            ->setConstructorArgs([$db, $request])
             ->getMock();
 
         $userMapper
             ->expects($this->once())
             ->method('isSiteAdmin')
+            ->with(2)
             ->willReturn(false);
 
         $usersController->setUserMapper($userMapper);
@@ -82,7 +85,7 @@ class UsersControllerTest extends TestCase
     {
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('There was a problem trying to delete the user');
-        $this->expectExceptionCode(400);
+        $this->expectExceptionCode(Http::BAD_REQUEST);
 
         $request = new Request([], ['REQUEST_URI' => "http://api.dev.joind.in/v2.1/users/3", 'REQUEST_METHOD' => 'DELETE']);
         $request->user_id = 1;
@@ -92,23 +95,24 @@ class UsersControllerTest extends TestCase
         $db = $this->getMockBuilder(mockPDO::class)->getMock();
 
         $userMapper = $this->getMockBuilder(UserMapper::class)
-            ->setConstructorArgs([$db,$request])
+            ->setConstructorArgs([$db, $request])
             ->getMock();
 
         $userMapper
             ->expects($this->once())
             ->method('isSiteAdmin')
+            ->with(1)
             ->willReturn(true);
 
         $userMapper
             ->expects($this->once())
             ->method('delete')
+            ->with(3)
             ->willReturn(false);
 
         $usersController->setUserMapper($userMapper);
         $usersController->deleteUser($request, $db);
     }
-
 
     /**
      * Ensures that if the deleteUser method is called and user_id is an
@@ -126,21 +130,106 @@ class UsersControllerTest extends TestCase
         $db = $this->getMockBuilder(mockPDO::class)->getMock();
 
         $userMapper = $this->getMockBuilder(UserMapper::class)
-            ->setConstructorArgs([$db,$request])
+            ->setConstructorArgs([$db, $request])
             ->getMock();
 
         $userMapper
             ->expects($this->once())
             ->method('isSiteAdmin')
+            ->with(1)
             ->willReturn(true);
 
         $userMapper
             ->expects($this->once())
             ->method('delete')
+            ->with(3)
             ->willReturn(true);
 
         $usersController->setUserMapper($userMapper);
         $this->assertNull($usersController->deleteUser($request, $db));
+    }
+
+    public function testDeleteTalkCommentsWithoutBeingLoggedInThrowsException(): void
+    {
+        $request = new Request(
+            [],
+            ['REQUEST_URI' => "http://api.dev.joind.in/v2.1/users/3/talk-comments", 'REQUEST_METHOD' => 'DELETE']
+        );
+
+        $usersController = new UsersController();
+        $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
+
+        $this->expectException(AuthenticationException::class);
+        $this->expectExceptionMessage('You must be logged in to perform this operation.');
+        $this->expectExceptionCode(Http::UNAUTHORIZED);
+
+        $usersController->deleteTalkComments($request, $db);
+    }
+
+    public function testDeleteTalkCommentsWithNonAdminThrowsException(): void
+    {
+        $this->expectException(AuthorizationException::class);
+        $this->expectExceptionMessage('This operation requires admin privileges.');
+        $this->expectExceptionCode(Http::FORBIDDEN);
+
+        $request = new Request(
+            [],
+            ['REQUEST_URI' => "http://api.dev.joind.in/v2.1/users/3/talk-comments", 'REQUEST_METHOD' => 'DELETE']
+        );
+        $request->user_id = 2;
+
+        $usersController = new UsersController();
+
+        $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
+
+        $userMapper = $this->getMockBuilder(UserMapper::class)
+            ->setConstructorArgs([$db, $request])
+            ->getMock();
+
+        $userMapper
+            ->expects($this->once())
+            ->method('isSiteAdmin')
+            ->with(2)
+            ->willReturn(false);
+
+        $usersController->setUserMapper($userMapper);
+        $usersController->deleteTalkComments($request, $db);
+    }
+
+    public function testDeleteTalkCommentsDeletesUsersTalkComments(): void
+    {
+        $usersController = new UsersController();
+
+        $request = new Request(
+            [],
+            ['REQUEST_URI' => "http://api.dev.joind.in/v2.1/users/3/talk-comments", 'REQUEST_METHOD' => 'DELETE']
+        );
+        $request->user_id = 1;
+
+        $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
+
+        $userMapper = $this->getMockBuilder(UserMapper::class)
+            ->setConstructorArgs([$db, $request])
+            ->getMock();
+
+        $userMapper
+            ->expects($this->once())
+            ->method('isSiteAdmin')
+            ->with(1)
+            ->willReturn(true);
+
+        $talkCommentMapper = $this->getMockBuilder(TalkCommentMapper::class)
+            ->setConstructorArgs([$db, $request])
+            ->getMock();
+
+        $talkCommentMapper
+            ->expects($this->once())
+            ->method('deleteCommentsForUser')
+            ->with(3);
+
+        $usersController->setUserMapper($userMapper);
+        $usersController->setTalkCommentMapper($talkCommentMapper);
+        $usersController->deleteTalkComments($request, $db);
     }
 
     public function testThatUserDataIsNotDoubleEscapedOnUserCreation()
@@ -157,7 +246,8 @@ class UsersControllerTest extends TestCase
                 ['password'],
                 ['twitter_username'],
                 ['biography']
-            )->willReturnOnConsecutiveCalls(
+            )
+            ->willReturnOnConsecutiveCalls(
                 'user"\'stuff',
                 'full"\'stuff',
                 'mailstuff@example.com',
@@ -168,7 +258,7 @@ class UsersControllerTest extends TestCase
 
         $view = $this->getMockBuilder(ApiView::class)->disableOriginalConstructor()->getMock();
         $view->expects($this->once())->method('setHeader')->with('Location', 'basepath_info/1');
-        $view->expects($this->once())->method('setResponseCode')->with(201);
+        $view->expects($this->once())->method('setResponseCode')->with(Http::CREATED);
         $request->method('getView')->willReturn($view);
 
         $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
@@ -222,7 +312,7 @@ class UsersControllerTest extends TestCase
 
         $view = $this->getMockBuilder(ApiView::class)->disableOriginalConstructor()->getMock();
         $view->expects($this->once())->method('setHeader')->with('Content-Length', 0);
-        $view->expects($this->once())->method('setResponseCode')->with(204);
+        $view->expects($this->once())->method('setResponseCode')->with(Http::NO_CONTENT);
         $request->method('getView')->willReturn($view);
 
         $db = $this->getMockBuilder('\PDO')->disableOriginalConstructor()->getMock();
@@ -255,7 +345,7 @@ class UsersControllerTest extends TestCase
     {
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('You must be logged in to change a user account');
-        $this->expectExceptionCode(401);
+        $this->expectExceptionCode(Http::UNAUTHORIZED);
 
         $request = new Request([], ['REQUEST_URI' => "http://api.dev.joind.in/v2.1/users/4/trusted", 'REQUEST_METHOD' => 'POST']);
         $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
@@ -263,7 +353,6 @@ class UsersControllerTest extends TestCase
         $usersController = new UsersController();
         $usersController->setTrusted($request, $db);
     }
-
 
     /**
      * Ensures that if the setTrsuted method is called and user_id is a,
@@ -275,7 +364,7 @@ class UsersControllerTest extends TestCase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage("You must be an admin to change a user's trusted state");
-        $this->expectExceptionCode(403);
+        $this->expectExceptionCode(Http::FORBIDDEN);
 
         $request = new Request([], ['REQUEST_URI' => "http://api.dev.joind.in/v2.1/users/4/trusted", 'REQUEST_METHOD' => 'POST']);
         $request->user_id = 2;
@@ -283,7 +372,7 @@ class UsersControllerTest extends TestCase
         $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
 
         $userMapper = $this->getMockBuilder(UserMapper::class)
-            ->setConstructorArgs([$db,$request])
+            ->setConstructorArgs([$db, $request])
             ->getMock();
 
         $userMapper
@@ -295,8 +384,6 @@ class UsersControllerTest extends TestCase
         $usersController->setTrusted($request, $db);
     }
 
-
-
     /**
      * Ensures that if the setTrusted method is called by an admin,
      * but without a trusted state, an exception is thrown
@@ -307,7 +394,7 @@ class UsersControllerTest extends TestCase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('You must provide a trusted state');
-        $this->expectExceptionCode(400);
+        $this->expectExceptionCode(Http::BAD_REQUEST);
 
         $request = $this->getMockBuilder(Request::class)->disableOriginalConstructor()->getMock();
         $request->method('getUserId')->willReturn(2);
@@ -319,7 +406,7 @@ class UsersControllerTest extends TestCase
         $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
 
         $userMapper = $this->getMockBuilder(UserMapper::class)
-            ->setConstructorArgs([$db,$request])
+            ->setConstructorArgs([$db, $request])
             ->getMock();
 
         $userMapper
@@ -341,7 +428,7 @@ class UsersControllerTest extends TestCase
     {
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Unable to update status');
-        $this->expectExceptionCode(500);
+        $this->expectExceptionCode(Http::INTERNAL_SERVER_ERROR);
 
         $request = $this->getMockBuilder(Request::class)->disableOriginalConstructor()->getMock();
         $request->method('getUserId')->willReturn(2);
@@ -353,7 +440,7 @@ class UsersControllerTest extends TestCase
         $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
 
         $userMapper = $this->getMockBuilder(UserMapper::class)
-            ->setConstructorArgs([$db,$request])
+            ->setConstructorArgs([$db, $request])
             ->getMock();
 
         $userMapper
@@ -369,7 +456,6 @@ class UsersControllerTest extends TestCase
         $usersController->setUserMapper($userMapper);
         $usersController->setTrusted($request, $db);
     }
-
 
     /**
      * Ensures that if the setTrusted method is called by an admin,
@@ -392,7 +478,7 @@ class UsersControllerTest extends TestCase
 
         $view->expects($this->once())
             ->method("setResponseCode")
-            ->with(204)
+            ->with(Http::NO_CONTENT)
             ->willReturn(true);
 
         $request->expects($this->once())
@@ -403,7 +489,7 @@ class UsersControllerTest extends TestCase
         $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
 
         $userMapper = $this->getMockBuilder(UserMapper::class)
-            ->setConstructorArgs([$db,$request])
+            ->setConstructorArgs([$db, $request])
             ->getMock();
 
         $userMapper

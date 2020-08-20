@@ -6,6 +6,7 @@ use PDO;
 use Psr\Container\ContainerInterface;
 use Joindin\Api\Request;
 use RuntimeException;
+use Teapot\StatusCode\Http;
 
 /**
  * Represents a Controller and action to dispatch a Request to.
@@ -122,11 +123,11 @@ class Route
         $method    = $this->getAction();
 
         if (!$container->has($className)) {
-            throw new RuntimeException('Unknown controller ' . $request->url_elements[2], 400);
+            throw new RuntimeException('Unknown controller ' . $request->getUrlElement(2), Http::BAD_REQUEST);
         }
 
         if (!method_exists($controller = $container->get($className), $method)) {
-            throw new RuntimeException('Action not found', 500);
+            throw new RuntimeException('Action not found', Http::INTERNAL_SERVER_ERROR);
         }
 
         if (function_exists('newrelic_name_transaction')) {

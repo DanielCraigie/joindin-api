@@ -6,6 +6,11 @@ use Joindin\Api\Request;
 
 /**
  * Object that represents a talk
+ *
+ * @property int $ID
+ * @property int $event_id
+ * @property array $speakers
+ * @property string $stub
  */
 class TalkModel extends BaseModel
 {
@@ -19,6 +24,7 @@ class TalkModel extends BaseModel
     public function getDefaultFields()
     {
         return [
+            'id'                      => 'ID',
             'talk_title'              => 'talk_title',
             'url_friendly_talk_title' => 'url_friendly_talk_title',
             'talk_description'        => 'talk_desc',

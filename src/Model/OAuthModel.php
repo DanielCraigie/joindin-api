@@ -5,16 +5,13 @@ namespace Joindin\Api\Model;
 use Exception;
 use PDO;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 class OAuthModel
 {
-    /**
-     * @var PDO
-     */
     // @codingStandardsIgnoreStart
     protected $_db;
     // @codingStandardsIgnoreEnd
-    /** @var Request */
     protected $request;
 
     /**
@@ -108,6 +105,7 @@ class OAuthModel
     {
         // is the username/password combination correct?
         $userId = $this->getUserId($username, $password);
+
         if (!$userId) {
             return false;
         }
@@ -142,7 +140,7 @@ class OAuthModel
         }
 
         if ($result['verified'] != 1) {
-            throw new Exception("Not verified", 401);
+            throw new Exception("Not verified", Http::UNAUTHORIZED);
         }
 
         if (!password_verify(md5($password), $result['password'])) {
@@ -265,9 +263,9 @@ class OAuthModel
         // or something else.
         if ($result['application']) {
             return $result['application'];
-        } else {
-            return "joind.in";
         }
+
+        return "joind.in";
     }
 
     /**
@@ -339,6 +337,7 @@ class OAuthModel
         $stmt = $this->_db->prepare($sql);
         $stmt->execute(["user_id" => $userId]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
         if ($result) {
             if (password_verify(md5($password), $result['password'])) {
                 return true;
@@ -366,6 +365,7 @@ class OAuthModel
         $stmt = $this->_db->prepare($sql);
         $stmt->execute(["twitter_username" => $twitterUsername]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
         if (!$result) {
             return false;
         }
@@ -414,11 +414,14 @@ class OAuthModel
                . "values(:screen_name, :name, :screen_name, :email, 1, 1, 0)";
 
         $stmt = $this->_db->prepare($sql);
-        if (!$stmt->execute([
-            'screen_name' => $values['screen_name'],
-            'name'        => $values['name'],
-            'email'       => $values['email'],
-        ])) {
+
+        if (
+            !$stmt->execute([
+                'screen_name' => $values['screen_name'],
+                'name'        => $values['name'],
+                'email'       => $values['email'],
+            ])
+        ) {
             throw new Exception('Something went wrong');
         }
 
@@ -446,11 +449,13 @@ class OAuthModel
         $stmt = $this->_db->prepare($sql);
         $stmt->execute(["email" => $email]);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
         if (!$result && $fullName && $userName) {
             $result = $this->createUserFromTrustedEmail($email, $fullName, $userName);
         }
 
         $userId = $result['ID'];
+
         if (!$userId) {
             return false;
         }

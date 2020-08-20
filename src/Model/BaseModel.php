@@ -6,11 +6,12 @@ use DateTime;
 use DateTimeZone;
 use Joindin\Api\Request;
 
+/**
+ * @property string|null $event_tz_cont For an event or event-related item, the first half of a TZ identifier
+ * @property string|null $event_tz_place For an event or event-related item, the second half of a TZ identifier
+ */
 abstract class BaseModel
 {
-    /**
-     * @var array
-     */
     protected $data;
 
     public function __construct(array $data)
@@ -85,12 +86,9 @@ abstract class BaseModel
 
         $fields = array_merge($fields, $this->getSubResources());
 
-        // special handling for dates
-        if ($this->event_tz_place != '' && $this->event_tz_cont != '') {
-            $tz = new DateTimeZone($this->event_tz_cont . '/' . $this->event_tz_place);
-        } else {
-            $tz = new DateTimeZone('UTC');
-        }
+        // special handling for dates; uses magic getters for event TZ columns
+        $tz = $this->event_tz_place != '' && $this->event_tz_cont != '' ?
+            new DateTimeZone($this->event_tz_cont . '/' . $this->event_tz_place) : new DateTimeZone('UTC');
 
         foreach ($fields as $output_name => $name) {
             $value = $this->$name;

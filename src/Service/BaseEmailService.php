@@ -27,15 +27,12 @@ abstract class BaseEmailService
      */
     protected $message;
 
-    /**
-     * Array of email addresses to send to
-     */
     protected $recipients;
 
     /**
      * Template path, can be changed when testing
      */
-    public $templatePath = "../View/emails/";
+    public $templatePath = __DIR__ . '/../View/emails/';
 
     /**
      * Make a message to be sent later
@@ -51,7 +48,7 @@ abstract class BaseEmailService
             throw new Exception("SMTP Server not properly set up.");
         }
 
-        $transport = Swift_SmtpTransport::newInstance(
+        $transport = new Swift_SmtpTransport(
             $config['email']['smtp']['host'],
             $config['email']['smtp']['port'],
             $config['email']['smtp']['security']
@@ -61,11 +58,11 @@ abstract class BaseEmailService
             ->setUsername($config['email']['smtp']['username'])
             ->setPassword($config['email']['smtp']['password']);
 
+        $this->mailer  = new Swift_Mailer($transport);
+        $this->message = new Swift_Message();
 
-        $this->mailer  = Swift_Mailer::newInstance($transport);
-        $this->message = Swift_Message::newInstance();
-
-        if (isset($config['email']['forward_all_to'])
+        if (
+            isset($config['email']['forward_all_to'])
             && ! empty($config['email']['forward_all_to'])
         ) {
             $this->recipients = [$config['email']['forward_all_to']];
@@ -91,6 +88,7 @@ abstract class BaseEmailService
                     . file_get_contents($this->templatePath . 'signature.md');
 
         $message = $template;
+
         foreach ($replacements as $field => $value) {
             $message = str_replace('[' . $field . ']', $value, $message);
         }

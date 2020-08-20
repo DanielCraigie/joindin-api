@@ -12,14 +12,13 @@ class PendingTalkClaimModelCollection extends BaseModelCollection
     /** @var array|PendingTalkClaimModel[] */
     protected $list;
 
-    /** @var int */
     protected $total;
 
     /**
      * Take arrays of data and create a collection of models; store metadata
      *
      * @param array $data
-     * @param       $total
+     * @param int   $total
      */
     public function __construct(array $data, $total)
     {
@@ -52,6 +51,7 @@ class PendingTalkClaimModelCollection extends BaseModelCollection
         $retval = [];
         // handle the collection first
         $retval = ['claims' => []];
+
         foreach ($this->list as $item) {
             $retval['claims'][] = $item->getOutputView($request, $verbose);
         }

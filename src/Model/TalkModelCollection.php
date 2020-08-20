@@ -13,7 +13,6 @@ class TalkModelCollection extends BaseModelCollection
     /** @var array|TalkModel[] */
     protected $list;
 
-    /** @var int */
     protected $total;
 
     /**
@@ -52,6 +51,7 @@ class TalkModelCollection extends BaseModelCollection
     {
         // handle the collection first
         $retval = ['talks' => []];
+
         foreach ($this->list as $item) {
             $retval['talks'][] = $item->getOutputView($request, $verbose);
         }

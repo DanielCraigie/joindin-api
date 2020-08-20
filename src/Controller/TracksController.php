@@ -7,6 +7,7 @@ use Joindin\Api\Model\EventMapper;
 use Joindin\Api\Model\TrackMapper;
 use PDO;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 class TracksController extends BaseApiController
 {
@@ -20,12 +21,13 @@ class TracksController extends BaseApiController
         if ($track_id) {
             $mapper = new TrackMapper($db, $request);
             $list   = $mapper->getTrackById($track_id, $verbose);
+
             if (false === $list) {
-                throw new Exception('Track not found', 404);
+                throw new Exception('Track not found', Http::NOT_FOUND);
             }
         } else {
             // listing makes no sense
-            throw new Exception('Generic tracks listing not supported', 405);
+            throw new Exception('Generic tracks listing not supported', Http::METHOD_NOT_ALLOWED);
         }
 
         return $list;
@@ -35,25 +37,28 @@ class TracksController extends BaseApiController
     {
         // Check for login
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in to edit this track", 401);
+            throw new Exception("You must be logged in to edit this track", Http::UNAUTHORIZED);
         }
 
         $track_id = $this->getItemId($request);
 
         $track_mapper = new TrackMapper($db, $request);
         $tracks       = $track_mapper->getTrackById($track_id, true);
+
         if (!$tracks) {
-            throw new Exception("Track not found", 404);
+            throw new Exception("Track not found", Http::NOT_FOUND);
         }
 
         $event_mapper = new EventMapper($db, $request);
         $events       = $event_mapper->getEventByTrackId($track_id, true, false, false);
+
         if (!$events || ! $events[0]['ID']) {
-            throw new Exception("Associated event not found", 404);
+            throw new Exception("Associated event not found", Http::NOT_FOUND);
         }
         $event_id = $events[0]['ID'];
+
         if (!$event_mapper->thisUserHasAdminOn($event_id)) {
-            throw new Exception('You do not have permission to edit this track', 403);
+            throw new Exception('You do not have permission to edit this track', Http::FORBIDDEN);
         }
 
         // validate fields
@@ -63,19 +68,22 @@ class TracksController extends BaseApiController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($track['track_name'])) {
             $errors[] = "'track_name' is a required field";
         }
         $track['track_description'] = filter_var(
-            $request->getParameter("track_description"),
+            $request->getParameter("track_description", null),
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
-        if (empty($track['track_description'])) {
-            $errors[] = "'track_description' is a required field";
+
+        if (!isset($track['track_description'])) {
+            unset($track['track_description']); // Track description not provided; don't edit
         }
+
         if ($errors) {
-            throw new Exception(implode(". ", $errors), 400);
+            throw new Exception(implode(". ", $errors), Http::BAD_REQUEST);
         }
 
         $track_mapper->editEventTrack($track, $track_id);
@@ -84,38 +92,41 @@ class TracksController extends BaseApiController
 
         $view = $request->getView();
         $view->setHeader('Location', $uri);
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
     }
 
     public function deleteTrack(Request $request, PDO $db)
     {
         // Check for login
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in to delete this track", 401);
+            throw new Exception("You must be logged in to delete this track", Http::UNAUTHORIZED);
         }
 
         $track_id = $this->getItemId($request);
 
         $track_mapper = new TrackMapper($db, $request);
         $tracks       = $track_mapper->getTrackById($track_id, true);
+
         if (!$tracks) {
-            throw new Exception("Track not found", 404);
+            throw new Exception("Track not found", Http::NOT_FOUND);
         }
 
         $event_mapper = new EventMapper($db, $request);
         $events       = $event_mapper->getEventByTrackId($track_id, true, false, false);
+
         if (!$events || ! $events[0]['ID']) {
-            throw new Exception("Associated event not found", 404);
+            throw new Exception("Associated event not found", Http::NOT_FOUND);
         }
         $event_id = $events[0]['ID'];
+
         if (!$event_mapper->thisUserHasAdminOn($event_id)) {
-            throw new Exception('You do not have permission to delete this track', 403);
+            throw new Exception('You do not have permission to delete this track', Http::FORBIDDEN);
         }
 
         $track_mapper->deleteEventTrack($track_id);
 
         $view = $request->getView();
         $view->setHeader('Content-Length', 0);
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
     }
 }

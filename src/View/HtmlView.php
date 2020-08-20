@@ -13,9 +13,8 @@ namespace Joindin\Api\View;
  */
 class HtmlView extends ApiView
 {
-
     /**
-     * @param $content
+     * @param array|string $content
      *
      * @return bool
      */
@@ -29,15 +28,16 @@ class HtmlView extends ApiView
     /**
      * Render the view
      *
-     * @param array $content data to be rendered
+     * @param array|string|bool $content data to be rendered
      *
-     * @return bool
+     * @return null
      */
     public function buildOutput($content)
     {
         $content = $this->addCount($content);
 
         $this->layoutStart();
+
         if (is_array($content)) {
             $this->printArray($content);
         } else {
@@ -62,6 +62,7 @@ class HtmlView extends ApiView
         // field name
         foreach ($content as $field => $value) {
             echo "<li><strong>" . $field . ":</strong> ";
+
             if (is_array($value)) {
                 // recurse
                 $this->printArray($value);
@@ -78,7 +79,7 @@ class HtmlView extends ApiView
      * Renders the passed value, either raw or as a link (if prepended by http
      * or https)
      *
-     * @param string $value
+     * @param string|bool $value
      *
      * @return void
      */
@@ -88,6 +89,7 @@ class HtmlView extends ApiView
             $value = $value ? 'true' : 'false';
         }
         $value = htmlentities($value, ENT_COMPAT, 'UTF-8');
+
         if ((strpos($value, 'http://') === 0) || (strpos($value, 'https://') === 0)) {
             echo "<a href=\"" . $value . "\">" . $value . "</a>";
         } else {

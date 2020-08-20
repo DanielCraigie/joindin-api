@@ -15,7 +15,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 namespace Joindin\Api;
 
 use ArrayIterator;
@@ -39,8 +38,8 @@ class Header
         $this->header = trim($header);
         $this->glue   = $glue;
 
-        foreach ((array)$values as $value) {
-            foreach ((array)$value as $v) {
+        foreach ((array) $values as $value) {
+            foreach ((array) $value as $v) {
                 $this->values[] = $v;
             }
         }
@@ -90,7 +89,7 @@ class Header
         for ($i = 0, $total = count($values); $i < $total; $i++) {
             if (strpos($values[$i], $this->glue) !== false) {
                 // Explode on glue when the glue is not inside of a comma
-                foreach (preg_split('/' . preg_quote($this->glue) . '(?=([^"]*"[^"]*")*[^"]*$)/', $values[$i]) as $v) {
+                foreach (preg_split('/' . preg_quote($this->glue, '/') . '(?=([^"]*"[^"]*")*[^"]*$)/', $values[$i]) as $v) {
                     $values[] = trim($v);
                 }
                 unset($values[$i]);
@@ -104,7 +103,7 @@ class Header
 
     public function hasValue($searchValue)
     {
-        return in_array($searchValue, $this->toArray());
+        return in_array($searchValue, $this->toArray(), false);
     }
 
     public function removeValue($searchValue)
@@ -112,7 +111,7 @@ class Header
         $this->values = array_values(
             array_filter(
                 $this->values,
-                function ($value) use ($searchValue) {
+                static function ($value) use ($searchValue) {
                     return $value != $searchValue;
                 }
             )
@@ -139,10 +138,12 @@ class Header
     public function buildEntityArray()
     {
         $assocArray = [];
+
         foreach ($this->values as $value) {
             $parts = explode('=', $value);
             $key   = ucwords($parts[0]);
-            if (count($parts) == 1) {
+
+            if (count($parts) === 1) {
                 if (array_key_exists(0, $assocArray)) {
                     $assocArray[0][] = $parts[0];
                 } else {
@@ -168,13 +169,15 @@ class Header
         // Normalize the header into a single array and iterate over all values
         foreach ($this->normalize()->toArray() as $val) {
             $part = [];
+
             foreach (preg_split('/;(?=([^"]*"[^"]*")*[^"]*$)/', $val) as $kvp) {
                 if (!preg_match_all('/<[^>]+>|[^=]+/', $kvp, $matches)) {
                     continue;
                 }
                 $pieces           = array_map($callback, $matches[0]);
-                $part[$pieces[0]] = isset($pieces[1]) ? $pieces[1] : '';
+                $part[$pieces[0]] = $pieces[1] ?? '';
             }
+
             if ($part) {
                 $params[] = $part;
             }
@@ -186,7 +189,7 @@ class Header
     /**
      * Trim a header by removing excess spaces and wrapping quotes
      *
-     * @param $str
+     * @param string $str
      *
      * @return string
      */

@@ -8,20 +8,14 @@ use Joindin\Api\Service\SpamCheckService;
 use Joindin\Api\Service\SpamCheckServiceInterface;
 use PDO;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 /**
  * Contact us end point
  */
 class ContactController extends BaseApiController
 {
-    /**
-     * @var ContactEmailService
-     */
     private $emailService;
-
-    /**
-     * @var SpamCheckService
-     */
     private $spamCheckService;
 
     /**
@@ -70,15 +64,18 @@ class ContactController extends BaseApiController
         $clientId     = $request->getParameter('client_id');
         $clientSecret = $request->getParameter('client_secret');
         $oauthModel   = $request->getOauthModel($db);
+
         if (!$oauthModel->isClientPermittedPasswordGrant($clientId, $clientSecret)) {
-            throw new Exception("This client cannot perform this action", 403);
+            throw new Exception("This client cannot perform this action", Http::FORBIDDEN);
         }
 
         $fields = ['name', 'email', 'subject', 'comment'];
         $error  = [];
         $data   = [];
+
         foreach ($fields as $name) {
             $value = $request->getParameter($name);
+
             if (empty($value)) {
                 $error[] = "'$name'";
             }
@@ -91,22 +88,25 @@ class ContactController extends BaseApiController
             $message .= implode(', ', $error);
             $message .= count($error) == 1 ? ' is ' : ' are ';
             $message .= 'required.';
-            throw new Exception($message, 400);
+
+            throw new Exception($message, Http::BAD_REQUEST);
         }
 
-        if (!$this->spamCheckService->isCommentAcceptable(
-            $data,
-            $request->getClientIP(),
-            $request->getClientUserAgent()
-        )) {
-            throw new Exception("Comment failed spam check", 400);
+        if (
+            !$this->spamCheckService->isCommentAcceptable(
+                $data['comment'],
+                $request->getClientIP(),
+                $request->getClientUserAgent()
+            )
+        ) {
+            throw new Exception("Comment failed spam check", Http::BAD_REQUEST);
         }
 
         $this->emailService->sendEmail($data);
 
         $view = $request->getView();
 
-        $view->setResponseCode(202);
+        $view->setResponseCode(Http::ACCEPTED);
         $view->setHeader('Content-Length', 0);
     }
 }

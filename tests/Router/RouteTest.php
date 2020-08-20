@@ -5,17 +5,18 @@ namespace Joindin\Api\Test\Router;
 use Exception;
 use Joindin\Api\Request;
 use Joindin\Api\Router\Route;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
+use Teapot\StatusCode\Http;
 
 /**
  * Class to test Route
  *
  * @covers \Joindin\Api\Router\Route
  */
-class RouteTest extends TestCase
+final class RouteTest extends TestCase
 {
-
     /**
      * DataProvider for testConstruct
      *
@@ -103,7 +104,7 @@ class RouteTest extends TestCase
                 'action'                => 'action2',
                 Request::class => $this->getRequest('v1'),
                 'expectedException'     => 'Exception',
-                'expectedExceptionCode' => 500,
+                'expectedExceptionCode' => Http::INTERNAL_SERVER_ERROR,
             ],
             [ // #2
                 'config'                => ['config'],
@@ -111,7 +112,7 @@ class RouteTest extends TestCase
                 'action'                => 'action2',
                 Request::class => $this->getRequest('v1'),
                 'expectedException'     => 'Exception',
-                'expectedExceptionCode' => 400,
+                'expectedExceptionCode' => Http::BAD_REQUEST,
                 'controllerExists'      => false
             ]
         ];
@@ -123,8 +124,8 @@ class RouteTest extends TestCase
      * @covers       \Joindin\Api\Router\Route::dispatch
      *
      * @param array $config
-     * @param $controller
-     * @param $action
+     * @param string $controller
+     * @param string $action
      * @param Request $request
      * @param bool $expectedException
      * @param bool $expectedExceptionCode
@@ -142,8 +143,8 @@ class RouteTest extends TestCase
     ) {
         $db        = 'database';
         $container = $this->getMockBuilder(ContainerInterface::class)
-                          ->disableOriginalConstructor()
-                          ->getMock();
+            ->disableOriginalConstructor()
+            ->getMock();
 
         $container
             ->expects($this->atLeastOnce())
@@ -154,18 +155,19 @@ class RouteTest extends TestCase
             $container
                 ->expects($this->atLeastOnce())
                 ->method('get')
-                ->willReturn(new $controller);
+                ->willReturn(new $controller());
         }
 
         $route = new Route($controller, $action);
 
         try {
-            $this->assertEquals('val', $route->dispatch($request, $db, $container));
+            $route->dispatch($request, $db, $container);
         } catch (Exception $ex) {
             if (!$expectedException) {
                 throw $ex;
             }
             $this->assertInstanceOf($expectedException, $ex);
+
             if ($expectedExceptionCode !== false) {
                 $this->assertEquals($expectedExceptionCode, $ex->getCode());
             }
@@ -181,12 +183,12 @@ class RouteTest extends TestCase
      */
     private function getRequest($urlElement)
     {
-        $request = $this->createMock(Request::class, ['getUrlElement'], [], '', false);
+        $request = $this->createMock(Request::class);
 
         $request->expects($this->any())
-                ->method('getUrlElement')
-                ->with(1)
-                ->willReturn($urlElement);
+            ->method('getUrlElement')
+            ->with($this->isType('integer'), $this->isType('string'))
+            ->willReturn($urlElement);
 
         return $request;
     }

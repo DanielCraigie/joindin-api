@@ -11,8 +11,9 @@ use Joindin\Api\Service\SpamCheckServiceInterface;
 use Joindin\Api\View\ApiView;
 use PDO;
 use PHPUnit\Framework\TestCase;
+use Teapot\StatusCode\Http;
 
-class ContactControllerTest extends TestCase
+final class ContactControllerTest extends TestCase
 {
     /**
      * @dataProvider dataProvider
@@ -20,8 +21,8 @@ class ContactControllerTest extends TestCase
      * @param bool  $isClientPermittedPasswordGrant
      * @param array $returnValueMap
      * @param bool  $isCommentAcceptable
-     * @param null  $expectedException
-     * @param null  $expectedExceptionMessage
+     * @param null|string $expectedException
+     * @param null|string $expectedExceptionMessage
      * @param bool  $spamShouldBeChecked
      * @param bool  $emailShouldBeSent
      *
@@ -49,8 +50,8 @@ class ContactControllerTest extends TestCase
         $db = $this->getMockBuilder(PDO::class)->disableOriginalConstructor()->getMock();
 
         $spamCheckService = $this->getMockBuilder(SpamCheckServiceInterface::class)
-                                 ->disableOriginalConstructor()
-                                 ->getMock();
+            ->disableOriginalConstructor()
+            ->getMock();
 
         if ($spamShouldBeChecked) {
             $spamCheckService
@@ -60,8 +61,8 @@ class ContactControllerTest extends TestCase
         }
 
         $emailService = $this->getMockBuilder(ContactEmailService::class)
-                             ->disableOriginalConstructor()
-                             ->getMock();
+            ->disableOriginalConstructor()
+            ->getMock();
 
         $contactController = new ContactController($emailService, $spamCheckService);
 
@@ -75,20 +76,20 @@ class ContactControllerTest extends TestCase
 
         if ($emailShouldBeSent) {
             $viewMock = $this->getMockBuilder(ApiView::class)
-                             ->disableOriginalConstructor()
-                             ->getMock();
+                ->disableOriginalConstructor()
+                ->getMock();
 
             $viewMock->expects($this->once())
-                     ->method('setResponseCode')
-                     ->with(202);
+                ->method('setResponseCode')
+                ->with(Http::ACCEPTED);
 
             $viewMock->expects($this->once())
-                     ->method('setHeader')
-                     ->with('Content-Length', 0);
+                ->method('setHeader')
+                ->with('Content-Length', 0);
 
             $request->expects($this->once())
-                    ->method('getView')
-                    ->willReturn($viewMock);
+                ->method('getView')
+                ->willReturn($viewMock);
 
             $emailService
                 ->expects($this->once())

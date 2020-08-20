@@ -6,6 +6,7 @@ use Exception;
 use Joindin\Api\Model\TokenMapper;
 use PDO;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 class TokenController extends BaseApiController
 {
@@ -25,56 +26,57 @@ class TokenController extends BaseApiController
 
         // all fields are required or this makes no sense
         if (empty($grantType)) {
-            throw new Exception('The field "grant_type" is required', 400);
+            throw new Exception('The field "grant_type" is required', Http::BAD_REQUEST);
         }
 
         if (empty($username) || empty($password)) {
-            throw new Exception('The fields "username" and "password" are both required', 400);
+            throw new Exception('The fields "username" and "password" are both required', Http::BAD_REQUEST);
         }
 
-        if ($grantType == 'password') {
-            // authenticate the user for web2
-
-            $clientId     = $request->getParameter('client_id');
-            $clientSecret = $request->getParameter('client_secret');
-            if (!$this->oauthModel->isClientPermittedPasswordGrant($clientId, $clientSecret)) {
-                throw new Exception("This client cannot authenticate using the password grant type", 403);
-            }
-
-            // expire any old tokens
-            if (isset($this->config['oauth']['expirable_client_ids'])) {
-                $this->oauthModel->expireOldTokens($this->config['oauth']['expirable_client_ids']);
-            }
-
-            // generate a temporary access token and then redirect back to the callback
-            $username = $request->getParameter('username');
-            $password = $request->getParameter('password');
-            $result   = $this->oauthModel->createAccessTokenFromPassword(
-                $clientId,
-                $username,
-                $password
-            );
-
-            if ($result) {
-                return ['access_token' => $result['access_token'], 'user_uri' => $result['user_uri']];
-            }
-
-            throw new Exception("Signin failed", 403);
+        if ($grantType != 'password') {
+            throw new Exception("Grant type not recognised", Http::BAD_REQUEST);
         }
 
-        throw new Exception("Grant type not recognised", 400);
+        // authenticate the user for web2
+
+        $clientId     = $request->getParameter('client_id');
+        $clientSecret = $request->getParameter('client_secret');
+
+        if (!$this->oauthModel->isClientPermittedPasswordGrant($clientId, $clientSecret)) {
+            throw new Exception("This client cannot authenticate using the password grant type", Http::FORBIDDEN);
+        }
+
+        // expire any old tokens
+        if (isset($this->config['oauth']['expirable_client_ids'])) {
+            $this->oauthModel->expireOldTokens($this->config['oauth']['expirable_client_ids']);
+        }
+
+        // generate a temporary access token and then redirect back to the callback
+        $username = $request->getParameter('username');
+        $password = $request->getParameter('password');
+        $result   = $this->oauthModel->createAccessTokenFromPassword(
+            $clientId,
+            $username,
+            $password
+        );
+
+        if (!$result) {
+            throw new Exception("Signin failed", Http::FORBIDDEN);
+        }
+
+        return ['access_token' => $result['access_token'], 'user_uri' => $result['user_uri']];
     }
 
     public function listTokensForUser(Request $request, PDO $db)
     {
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in", 401);
+            throw new Exception("You must be logged in", Http::UNAUTHORIZED);
         }
 
         $mapper = $this->getTokenMapper($db, $request);
 
         if (!$mapper->tokenBelongsToTrustedApplication($request->getAccessToken())) {
-            throw new Exception("You can not access the token list with this client", 403);
+            throw new Exception("You can not access the token list with this client", Http::FORBIDDEN);
         }
 
         $tokens = $mapper->getRevokableTokensForUser(
@@ -89,13 +91,13 @@ class TokenController extends BaseApiController
     public function getToken(Request $request, PDO $db)
     {
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in", 401);
+            throw new Exception("You must be logged in", Http::UNAUTHORIZED);
         }
 
         $mapper = $this->getTokenMapper($db, $request);
 
         if (!$mapper->tokenBelongsToTrustedApplication($request->getAccessToken())) {
-            throw new Exception("You can not access the token list with this client", 403);
+            throw new Exception("You can not access the token list with this client", Http::FORBIDDEN);
         }
 
         $tokens = $mapper->getTokenByIdAndUser(
@@ -109,13 +111,13 @@ class TokenController extends BaseApiController
     public function revokeToken(Request $request, PDO $db)
     {
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in", 401);
+            throw new Exception("You must be logged in", Http::UNAUTHORIZED);
         }
 
         $tokenMapper = $this->getTokenMapper($db, $request);
 
         if (!$tokenMapper->tokenBelongsToTrustedApplication($request->getAccessToken())) {
-            throw new Exception("You can not access the token list with this client", 403);
+            throw new Exception("You can not access the token list with this client", Http::FORBIDDEN);
         }
 
         $token = $tokenMapper->getRevokableTokenByIdAndUser(
@@ -124,17 +126,17 @@ class TokenController extends BaseApiController
         );
 
         if (!$token->getTokens()) {
-            throw new Exception('No tokens found', 404);
+            throw new Exception('No tokens found', Http::NOT_FOUND);
         }
 
         try {
             $tokenMapper->deleteToken($this->getItemId($request));
         } catch (Exception $e) {
-            throw new Exception($e->getMessage(), 500, $e);
+            throw new Exception($e->getMessage(), Http::INTERNAL_SERVER_ERROR, $e);
         }
 
         $request->getView()->setNoRender(true);
-        $request->getView()->setResponseCode(204);
+        $request->getView()->setResponseCode(Http::NO_CONTENT);
         $request->getView()->setHeader(
             'Location',
             $request->base . '/' . $request->version . '/token'

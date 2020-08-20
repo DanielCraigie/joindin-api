@@ -4,26 +4,15 @@ namespace Joindin\Api\Router;
 
 use Exception;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 /**
  * The main API Router; acts as the version selector
  */
 class ApiRouter extends BaseRouter
 {
-
-    /**
-     * @var array The configuration for this Router
-     */
     protected $config;
-
-    /**
-     * @var array A list of supported versions and Routers
-     */
     private $routers;
-
-    /**
-     * @var array A list of versions once but no longer supported
-     */
     private $oldVersions;
 
     /**
@@ -36,7 +25,7 @@ class ApiRouter extends BaseRouter
      *
      * @param array $config The application configuration
      * @param array $routers
-     * @param       $oldVersions
+     * @param array $oldVersions
      */
     public function __construct(array $config, array $routers, array $oldVersions)
     {
@@ -74,6 +63,7 @@ class ApiRouter extends BaseRouter
     public function getRoute(Request $request)
     {
         $version = $request->getUrlElement(1);
+
         if (!$version) {
             // empty version, set request to use the latest
             $request->version = $this->latestVersion;
@@ -92,6 +82,6 @@ class ApiRouter extends BaseRouter
             throw new Exception("This API version is no longer supported. Please use {$this->latestVersion}");
         }
 
-        throw new Exception('API version must be specified', 404);
+        throw new Exception('API version must be specified', Http::NOT_FOUND);
     }
 }

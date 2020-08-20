@@ -6,13 +6,14 @@ use Exception;
 use Joindin\Api\Model\ClientMapper;
 use PDO;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 class ApplicationsController extends BaseApiController
 {
     public function getApplication(Request $request, PDO $db)
     {
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in", 401);
+            throw new Exception("You must be logged in", Http::UNAUTHORIZED);
         }
 
         $mapper = $this->getClientMapper($db, $request);
@@ -28,7 +29,7 @@ class ApplicationsController extends BaseApiController
     public function listApplications(Request $request, PDO $db)
     {
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in", 401);
+            throw new Exception("You must be logged in", Http::UNAUTHORIZED);
         }
 
         $mapper = $this->getClientMapper($db, $request);
@@ -45,7 +46,7 @@ class ApplicationsController extends BaseApiController
     public function createApplication(Request $request, PDO $db)
     {
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in", 401);
+            throw new Exception("You must be logged in", Http::UNAUTHORIZED);
         }
 
         $app    = [];
@@ -56,6 +57,7 @@ class ApplicationsController extends BaseApiController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($app['name'])) {
             $errors[] = "'name' is a required field";
         }
@@ -65,6 +67,7 @@ class ApplicationsController extends BaseApiController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($app['description'])) {
             $errors[] = "'description' is a required field";
         }
@@ -73,12 +76,13 @@ class ApplicationsController extends BaseApiController
             $request->getParameter("callback_url"),
             FILTER_SANITIZE_URL
         );
+
         if (empty($app['callback_url'])) {
             $errors[] = "'callback_url' is a required field";
         }
 
         if ($errors) {
-            throw new Exception(implode(". ", $errors), 400);
+            throw new Exception(implode(". ", $errors), Http::BAD_REQUEST);
         }
 
         $app['user_id'] = $request->user_id;
@@ -87,7 +91,7 @@ class ApplicationsController extends BaseApiController
         $clientId     = $clientMapper->createClient($app);
 
         $uri = $request->base . '/' . $request->version . '/applications/' . $clientId;
-        $request->getView()->setResponseCode(201);
+        $request->getView()->setResponseCode(Http::CREATED);
         $request->getView()->setHeader('Location', $uri);
 
         $mapper    = $this->getClientMapper($db, $request);
@@ -99,7 +103,7 @@ class ApplicationsController extends BaseApiController
     public function editApplication(Request $request, PDO $db)
     {
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in", 401);
+            throw new Exception("You must be logged in", Http::UNAUTHORIZED);
         }
 
         $app    = [];
@@ -110,6 +114,7 @@ class ApplicationsController extends BaseApiController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($app['name'])) {
             $errors[] = "'name' is a required field";
         }
@@ -119,6 +124,7 @@ class ApplicationsController extends BaseApiController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($app['description'])) {
             $errors[] = "'description' is a required field";
         }
@@ -129,7 +135,7 @@ class ApplicationsController extends BaseApiController
         );
 
         if ($errors) {
-            throw new Exception(implode(". ", $errors), 400);
+            throw new Exception(implode(". ", $errors), Http::BAD_REQUEST);
         }
 
         $app['user_id'] = $request->user_id;
@@ -138,7 +144,7 @@ class ApplicationsController extends BaseApiController
         $clientId     = $clientMapper->updateClient($this->getItemId($request), $app);
 
         $uri = $request->base . '/' . $request->version . '/applications/' . $clientId;
-        $request->getView()->setResponseCode(201);
+        $request->getView()->setResponseCode(Http::CREATED);
         $request->getView()->setHeader('Location', $uri);
 
         $newClient = $clientMapper->getClientByIdAndUser($clientId, $request->user_id);
@@ -149,7 +155,7 @@ class ApplicationsController extends BaseApiController
     public function deleteApplication(Request $request, PDO $db)
     {
         if (!isset($request->user_id)) {
-            throw new Exception("You must be logged in", 401);
+            throw new Exception("You must be logged in", Http::UNAUTHORIZED);
         }
 
         $clientMapper = $this->getClientMapper($db, $request);
@@ -160,17 +166,17 @@ class ApplicationsController extends BaseApiController
         );
 
         if (!$client->getClients()) {
-            throw new Exception('No application found', 404);
+            throw new Exception('No application found', Http::NOT_FOUND);
         }
 
         try {
             $clientMapper->deleteClient($this->getItemId($request));
         } catch (Exception $e) {
-            throw new Exception($e->getMessage(), 500, $e);
+            throw new Exception($e->getMessage(), Http::INTERNAL_SERVER_ERROR, $e);
         }
 
         $request->getView()->setNoRender(true);
-        $request->getView()->setResponseCode(204);
+        $request->getView()->setResponseCode(Http::NO_CONTENT);
         $request->getView()->setHeader(
             'Location',
             $request->base . '/' . $request->version . '/applications'

@@ -12,9 +12,8 @@ use PHPUnit\Framework\TestCase;
  *
  * @covers \Joindin\Api\Router\DefaultRouter
  */
-class DefaultRouterTest extends TestCase
+final class DefaultRouterTest extends TestCase
 {
-
     /**
      * DataProvider for testGetRoute
      *

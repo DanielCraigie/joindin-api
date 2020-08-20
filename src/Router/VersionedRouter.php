@@ -4,13 +4,13 @@ namespace Joindin\Api\Router;
 
 use Exception;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 /**
  * A Router to route versioned Routes
  */
 class VersionedRouter extends BaseRouter
 {
-
     /**
      * The version this Router represents
      *
@@ -50,16 +50,18 @@ class VersionedRouter extends BaseRouter
     public function getRoute(Request $request)
     {
         $badMethod = false;
+
         foreach ($this->rules as $rule) {
             if (preg_match('%^/v' . $this->version . $rule['path'] . '%', $request->getPathInfo(), $matches)) {
                 if (isset($rule['verbs']) && ! in_array($request->getVerb(), $rule['verbs'])) {
                     $badMethod = true;
+
                     continue;
                 }
                 // Determine numeric keys
                 $exclude = array_filter(
                     array_keys($matches),
-                    function ($val) {
+                    static function ($val) {
                         return is_integer($val);
                     }
                 );
@@ -71,8 +73,9 @@ class VersionedRouter extends BaseRouter
         }
 
         if ($badMethod) {
-            throw new Exception('Method not supported', 415);
+            throw new Exception('Method not supported', Http::METHOD_NOT_ALLOWED);
         }
-        throw new Exception('Endpoint not found', 404);
+
+        throw new Exception('Endpoint not found', Http::NOT_FOUND);
     }
 }

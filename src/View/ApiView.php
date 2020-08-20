@@ -2,9 +2,10 @@
 
 namespace Joindin\Api\View;
 
+use Teapot\StatusCode\Http;
+
 class ApiView
 {
-    /** @var array */
     protected $headers;
 
     /** @var int */
@@ -13,7 +14,7 @@ class ApiView
     /** @var bool */
     protected $noRender;
 
-    public function __construct(array $headers = [], $responseCode = 200, $noRender = false)
+    public function __construct(array $headers = [], $responseCode = Http::OK, $noRender = false)
     {
         $this->headers      = $headers;
         $this->responseCode = $responseCode;
@@ -21,9 +22,9 @@ class ApiView
     }
 
     /**
-     * @param $content
+     * @param mixed $content
      *
-     * @return array
+     * @return mixed
      */
     protected function addCount($content)
     {
@@ -32,7 +33,9 @@ class ApiView
                 // count what's in the non-meta element
                 if ($name == "meta") {
                     continue;
-                } elseif (is_array($item)) {
+                }
+
+                if (is_array($item)) {
                     $content['meta']['count'] = count($item);
                 }
             }
@@ -68,7 +71,7 @@ class ApiView
     }
 
     /**
-     * @param $content
+     * @param array|string $content
      *
      * @return bool
      */
@@ -76,12 +79,15 @@ class ApiView
     {
         ob_start();
         $body = '';
+
         if ($content && $this->noRender === false) {
             $body = $this->buildOutput($content);
         }
-        if (200 == $this->responseCode) {
+
+        if (Http::OK == $this->responseCode) {
             $this->responseCode = http_response_code();
         }
+
         foreach ($this->headers as $key => $value) {
             header($key . ': ' . $value, true);
         }
@@ -89,6 +95,7 @@ class ApiView
 
         echo $body;
         ob_end_flush();
+
         return true;
     }
 

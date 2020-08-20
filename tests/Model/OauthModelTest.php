@@ -8,17 +8,22 @@ use Joindin\Api\Request;
 use PDO;
 use PDOStatement;
 use PHPUnit\Framework\TestCase;
+use Teapot\StatusCode\Http;
 
-class OauthModelTest extends TestCase
+final class OauthModelTest extends TestCase
 {
+    private $pdo;
+    private $request;
+    private $oauth;
+
     public function setup(): void
     {
         $this->pdo              = $this->getMockBuilder(PDO::class)
-                                       ->disableOriginalConstructor()
-                                       ->getMock();
+            ->disableOriginalConstructor()
+            ->getMock();
         $this->request          = $this->getMockBuilder(Request::class)
-                                       ->disableOriginalConstructor()
-                                       ->getMock();
+            ->disableOriginalConstructor()
+            ->getMock();
         $this->request->base    = "";
         $this->request->version = "2.1";
 
@@ -45,7 +50,7 @@ class OauthModelTest extends TestCase
     {
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('Not verified');
-        $this->expectExceptionCode(401);
+        $this->expectExceptionCode(Http::UNAUTHORIZED);
 
         $stmt = $this->getMockBuilder(PDOStatement::class)->getMock();
         $stmt->method('execute')->willReturn(true);

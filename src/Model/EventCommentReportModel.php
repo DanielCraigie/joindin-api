@@ -6,6 +6,9 @@ use Joindin\Api\Request;
 
 /**
  * Object that represents a reported event comment
+ *
+ * @property int $event_id
+ * @property int $reporting_user_id
  */
 class EventCommentReportModel extends BaseModel
 {
@@ -69,6 +72,7 @@ class EventCommentReportModel extends BaseModel
         $version = $request->version;
 
         $item['reporting_user_uri'] = $base . '/' . $version . '/users/' . $this->reporting_user_id;
+
         if (!empty($this->deciding_user_id)) {
             $item['deciding_user_uri'] = $base . '/' . $version . '/users/' . $this->deciding_user_id;
         }

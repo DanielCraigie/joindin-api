@@ -50,6 +50,7 @@ class TrackMapper extends ApiMapper
         $response = $stmt->execute([
             ':event_id' => $event_id
         ]);
+
         if ($response) {
             $results          = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $results['total'] = $this->getTotalCount($sql, [':event_id' => $event_id]);
@@ -98,8 +99,10 @@ class TrackMapper extends ApiMapper
         $sql      .= ' where t.ID = :track_id';
         $stmt     = $this->_db->prepare($sql);
         $response = $stmt->execute(["track_id" => $track_id]);
+
         if ($response) {
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
             if ($results) {
                 $results['total'] = $this->getTotalCount($sql, ["track_id" => $track_id]);
 
@@ -119,12 +122,9 @@ class TrackMapper extends ApiMapper
      */
     public function createEventTrack(array $data, $event_id)
     {
-        // Sanity check: ensure all mandatory fields are present.
-        $mandatory_fields          = [
-            'track_name',
-            'track_description',
-        ];
-        $contains_mandatory_fields = ! array_diff($mandatory_fields, array_keys($data));
+        // Sanity check: ensure all mandatory fields are present.;
+        $contains_mandatory_fields = ! array_diff($mandatory_fields = ['track_name'], array_keys($data));
+
         if (!$contains_mandatory_fields) {
             throw new Exception("Missing mandatory fields");
         }
@@ -137,6 +137,7 @@ class TrackMapper extends ApiMapper
             if (in_array($column_name, ['talks_count'])) {
                 continue;
             }
+
             if (array_key_exists($api_name, $data)) {
                 $column_names[]         = $column_name;
                 $placeholders[]         = ':' . $api_name;
@@ -153,6 +154,7 @@ class TrackMapper extends ApiMapper
         $sql  = 'insert into event_track (' . implode(', ', $column_names) . ') ';
         $sql  .= 'values (' . implode(', ', $placeholders) . ')';
         $stmt = $this->_db->prepare($sql);
+
         try {
             $stmt->execute($data_values);
         } catch (Exception $e) {
@@ -189,11 +191,8 @@ class TrackMapper extends ApiMapper
     public function editEventTrack(array $data, $track_id)
     {
         // Sanity check: ensure all mandatory fields are present.
-        $mandatory_fields          = [
-            'track_name',
-            'track_description',
-        ];
-        $contains_mandatory_fields = ! array_diff($mandatory_fields, array_keys($data));
+        $contains_mandatory_fields = ! array_diff($mandatory_fields = ['track_name'], array_keys($data));
+
         if (!$contains_mandatory_fields) {
             throw new Exception("Missing mandatory fields");
         }
@@ -210,6 +209,7 @@ class TrackMapper extends ApiMapper
             if (in_array($column_name, ['pending', 'active'])) {
                 continue;
             }
+
             if (array_key_exists($api_name, $data)) {
                 $pairs[]          = "$column_name = :$api_name";
                 $items[$api_name] = $data[$api_name];

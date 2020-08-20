@@ -6,6 +6,7 @@ use Exception;
 use Joindin\Api\Model\TalkMapper;
 use PDO;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 class TalkLinkController extends BaseTalkController
 {
@@ -28,7 +29,7 @@ class TalkLinkController extends BaseTalkController
         if (count($links) !== 1) {
             throw new Exception(
                 "ID not found",
-                404
+                Http::NOT_FOUND
             );
         }
 
@@ -50,7 +51,7 @@ class TalkLinkController extends BaseTalkController
         if (!$talk_mapper->updateTalkLink($talk_id, $link_id, $display_name, $url)) {
             throw new Exception(
                 "Update of Link ID Failed",
-                500
+                Http::INTERNAL_SERVER_ERROR
             );
         }
 
@@ -70,7 +71,7 @@ class TalkLinkController extends BaseTalkController
         if (!$talk_mapper->removeTalkLink($talk_id, $request->url_elements[5])) {
             throw new Exception(
                 "Talk Link ID not found",
-                404
+                Http::NOT_FOUND
             );
         }
 
@@ -89,18 +90,20 @@ class TalkLinkController extends BaseTalkController
         //Check the content is in the correct format
         $display_name = $request->getParameter('display_name');
         $url          = $request->getParameter('url');
+
         if (!$display_name || ! $url) {
             throw new Exception(
                 "Missing required fields URL OR Display Name",
-                400
+                Http::BAD_REQUEST
             );
         }
 
         $link_id = $talk_mapper->addTalkLink($talk_id, $display_name, $url);
+
         if (!$link_id) {
             throw new Exception(
                 "The Link has not been inserted",
-                400
+                Http::BAD_REQUEST
             );
         }
 
@@ -120,10 +123,11 @@ class TalkLinkController extends BaseTalkController
     {
         $is_admin   = $mapper->thisUserHasAdminOn($talk_id);
         $is_speaker = $mapper->isUserASpeakerOnTalk($talk_id, $request->user_id);
+
         if (!($is_admin || $is_speaker)) {
             throw new Exception(
                 "You do not have permission to add links to this talk",
-                403
+                Http::FORBIDDEN
             );
         }
     }
@@ -139,6 +143,6 @@ class TalkLinkController extends BaseTalkController
 
         $view = $request->getView();
         $view->setHeader('Location', rtrim("/", $uri));
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
     }
 }

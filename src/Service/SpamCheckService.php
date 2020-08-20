@@ -2,81 +2,70 @@
 
 namespace Joindin\Api\Service;
 
+use GuzzleHttp\ClientInterface;
+use GuzzleHttp\Exception;
+
 /**
  * A class that lets you check against an external service (Akismet)
  * for spam in your content
  */
 class SpamCheckService implements SpamCheckServiceInterface
 {
+    private $httpClient;
+
     protected $akismetUrl;
 
     protected $blog;
 
     /**
+     * @param ClientInterface $httpClient
      * @param string $apiKey
      * @param string $blog
      */
-    public function __construct($apiKey, $blog)
+    public function __construct(ClientInterface $httpClient, $apiKey, $blog)
     {
-        $this->akismetUrl = 'http://' . $apiKey . '.rest.akismet.com';
+        $this->httpClient = $httpClient;
+        $this->akismetUrl = 'https://' . $apiKey . '.rest.akismet.com';
         $this->blog       = $blog;
     }
 
     /**
      * Check your comment against the spam check service
      *
-     * @param array  $data
+     * @see https://akismet.crom/development/api/#comment-check
+     *
+     * @param string $comment
      * @param string $userIp
      * @param string $userAgent
      *
      * @return bool true if the comment is okay, false if it got rated as spam
      */
-    public function isCommentAcceptable(array $data, $userIp, $userAgent)
+    public function isCommentAcceptable(string $comment, $userIp, $userAgent)
     {
-        $comment = [];
-
-        // set some required fields
-        $comment['blog'] = $this->blog;
-
-        // TODO what are better values to use for these required fields?
-        $comment['user_ip']    = $userIp;
-        $comment['user_agent'] = $userAgent;
-
-        // now use the incoming data
-        $comment['comment_content'] = $this->getField("comment", $data);
-
-        // actually do the check
-        $ch = curl_init($this->akismetUrl . '/1.1/comment-check');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $comment);
-
-        $result = curl_exec($ch);
-        curl_close($ch);
-
-        // if the result is false, it wasn't spam and we can return true
-        // to indicate that the comment is acceptable
-        if ($result == "false") {
-            return true;
+        if ('' === trim($comment)) {
+            return false;
         }
 
-        // otherwise, anything could have happened and we don't know if it's acceptable
-        // TODO log what did happen
-        return false;
-    }
-
-    /**
-     * @param       $key
-     * @param array $data
-     *
-     * @return false|mixed
-     */
-    protected function getField($key, array $data)
-    {
-        if (isset($data[$key])) {
-            return $data[$key];
+        try {
+            $response = $this->httpClient->request(
+                'POST',
+                sprintf(
+                    '%s/1.1/comment-check',
+                    $this->akismetUrl
+                ),
+                [
+                    'body' => http_build_query([
+                        'blog' => $this->blog,
+                        'comment_content' => $comment,
+                        'user_agent' => $userAgent,
+                        'user_ip' => $userIp,
+                    ]),
+                ]
+            );
+        } catch (Exception\GuzzleException $exception) {
+            return false;
         }
 
-        return false;
+        return 'true' === $response->getBody()->getContents();
     }
 }

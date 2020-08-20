@@ -1,13 +1,14 @@
 <?php
+
 namespace Joindin\Api\Test\Model;
 
 use Joindin\Api\Model\TalkMapper;
 use Joindin\Api\Request;
-use JoindinTest\Inc\mockPDO;
+use Joindin\Api\Test\Mock\mockPDO;
 use PDOStatement;
 use PHPUnit\Framework\TestCase;
 
-class TalkMapperTest extends TestCase
+final class TalkMapperTest extends TestCase
 {
     public function testMediaTypesAreAddedCorrectly()
     {
@@ -21,8 +22,8 @@ class TalkMapperTest extends TestCase
 
         $mockdb = $this->getMockBuilder(mockPDO::class)->getMock();
         $stmt = $this->getMockBuilder(PDOStatement::class)
-                ->setMethods(["execute", 'fetchAll'])
-                ->getMock();
+            ->setMethods(["execute", 'fetchAll'])
+            ->getMock();
 
         $stmt->method("execute")->willReturn(true);
 
@@ -98,8 +99,8 @@ class TalkMapperTest extends TestCase
     {
         $stmt = $this->getMockBuilder(PDOStatement::class)->disableOriginalConstructor()->getMock();
         $stmt->method('execute')
-             ->with(['talk_id' => 12])
-             ->willReturn(true);
+            ->with(['talk_id' => 12])
+            ->willReturn(true);
 
         $pdo = $this->getMockBuilder(mockPDO::class)->disableOriginalConstructor()->getMock();
         $pdo->method('prepare')
@@ -115,8 +116,8 @@ class TalkMapperTest extends TestCase
     {
         $stmt = $this->getMockBuilder(PDOStatement::class)->disableOriginalConstructor()->getMock();
         $stmt->method('execute')
-             ->with(['talk_id' => 12])
-             ->willReturn(true);
+            ->with(['talk_id' => 12])
+            ->willReturn(true);
 
         $pdo = $this->getMockBuilder(mockPDO::class)->disableOriginalConstructor()->getMock();
         $pdo->method('prepare')
@@ -132,8 +133,8 @@ class TalkMapperTest extends TestCase
     {
         $stmt = $this->getMockBuilder(PDOStatement::class)->disableOriginalConstructor()->getMock();
         $stmt->method('execute')
-             ->with(['talk_id' => 12])
-             ->willReturn(false);
+            ->with(['talk_id' => 12])
+            ->willReturn(false);
 
         $pdo = $this->getMockBuilder(mockPDO::class)->disableOriginalConstructor()->getMock();
         $pdo->method('prepare')
@@ -151,8 +152,8 @@ class TalkMapperTest extends TestCase
     {
         $stmt = $this->getMockBuilder(PDOStatement::class)->disableOriginalConstructor()->getMock();
         $stmt->method('execute')
-             ->with(['talk_id' => 12])
-             ->will($this->onConsecutiveCalls(true, false));
+            ->with(['talk_id' => 12])
+            ->will($this->onConsecutiveCalls(true, false));
 
         $pdo = $this->getMockBuilder(mockPDO::class)->disableOriginalConstructor()->getMock();
         $pdo->method('prepare')
@@ -174,8 +175,8 @@ class TalkMapperTest extends TestCase
     {
         $stmt = $this->getMockBuilder(PDOStatement::class)->disableOriginalConstructor()->getMock();
         $stmt->method('execute')
-             ->with(['talk_id' => 12])
-             ->will($this->onConsecutiveCalls(true, true, false));
+            ->with(['talk_id' => 12])
+            ->will($this->onConsecutiveCalls(true, true, false));
 
         $pdo = $this->getMockBuilder(mockPDO::class)->disableOriginalConstructor()->getMock();
         $pdo->method('prepare')
@@ -198,8 +199,8 @@ class TalkMapperTest extends TestCase
     {
         $stmt = $this->getMockBuilder(PDOStatement::class)->disableOriginalConstructor()->getMock();
         $stmt->method('execute')
-             ->with(['talk_id' => 12])
-             ->will($this->onConsecutiveCalls(true, true, true, false));
+            ->with(['talk_id' => 12])
+            ->will($this->onConsecutiveCalls(true, true, true, false));
 
         $pdo = $this->getMockBuilder(mockPDO::class)->disableOriginalConstructor()->getMock();
         $pdo->method('prepare')
@@ -219,13 +220,12 @@ class TalkMapperTest extends TestCase
         $this->assertFalse($mapper->delete(12));
     }
 
-
     public function testThatWorkingTalkDeletionCommits()
     {
         $stmt = $this->getMockBuilder(PDOStatement::class)->disableOriginalConstructor()->getMock();
         $stmt->method('execute')
-             ->with(['talk_id' => 12])
-             ->will($this->onConsecutiveCalls(true, true, true, true));
+            ->with(['talk_id' => 12])
+            ->will($this->onConsecutiveCalls(true, true, true, true));
 
         $pdo = $this->getMockBuilder(mockPDO::class)->disableOriginalConstructor()->getMock();
         $pdo->method('prepare')

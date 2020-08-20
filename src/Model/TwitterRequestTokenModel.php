@@ -6,6 +6,8 @@ use Joindin\Api\Request;
 
 /**
  * Object to represent a twitter request token
+ *
+ * @property int $ID
  */
 class TwitterRequestTokenModel extends BaseModel
 {
@@ -37,7 +39,6 @@ class TwitterRequestTokenModel extends BaseModel
             'secret' => 'secret',
         ];
     }
-
 
     /**
      * Return this object with client-facing fields and hypermedia, ready for output

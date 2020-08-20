@@ -3,13 +3,13 @@
 /**
  * Facebook-specific endpoints live here
  */
-
 namespace Joindin\Api\Controller;
 
 use Exception;
 use GuzzleHttp\Client;
 use PDO;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
 
 class FacebookController extends BaseApiController
 {
@@ -29,16 +29,19 @@ class FacebookController extends BaseApiController
      */
     public function logUserIn(Request $request, PDO $db)
     {
-        if (empty($this->config['facebook']['app_id'])
-            || empty($this->config['facebook']['app_secret'])) {
-            throw new Exception("Cannot login via Facebook", 501);
+        if (
+            empty($this->config['facebook']['app_id'])
+            || empty($this->config['facebook']['app_secret'])
+        ) {
+            throw new Exception("Cannot login via Facebook", Http::NOT_IMPLEMENTED);
         }
 
         $clientId         = $request->getParameter('client_id');
         $clientSecret     = $request->getParameter('client_secret');
         $this->oauthModel = $request->getOauthModel($db);
+
         if (!$this->oauthModel->isClientPermittedPasswordGrant($clientId, $clientSecret)) {
-            throw new Exception("This client cannot perform this action", 403);
+            throw new Exception("This client cannot perform this action", Http::FORBIDDEN);
         }
 
         // check incoming values
@@ -60,49 +63,54 @@ class FacebookController extends BaseApiController
             ]
         ]);
 
-        if ($res->getStatusCode() == 200) {
-            $data         = json_decode((string)$res->getBody(), true);
-            $access_token = $data['access_token'];
+        if ($res->getStatusCode() != Http::OK) {
+            trigger_error(
+                sprintf(
+                    'Unexpected Facebook error (%s: %s)',
+                    $res->getStatusCode(),
+                    $res->getBody()
+                ),
+                E_USER_WARNING
+            );
 
-            // retrieve email address from Facebook profile
-            $res = $client->get('https://graph.facebook.com/me', [
-                'query' => [
-                    'access_token' => $access_token,
-                    'fields'       => 'name,email',
-                ]
-            ]);
-            if ($res->getStatusCode() == 200) {
-                $data = json_decode((string)$res->getBody(), true, 512, JSON_BIGINT_AS_STRING);
-                if (!array_key_exists('email', $data)) {
-                    throw new Exception("Email address is unavailable", 403);
-                }
-                $email    = $data['email'];
-                $fullName = $data['name'];
-                $id       = $data['id'];
-
-                $result = $this->oauthModel->createAccessTokenFromTrustedEmail(
-                    $clientId,
-                    $email,
-                    $fullName,
-                    $id
-                );
-
-                if ($result) {
-                    return ['access_token' => $result['access_token'], 'user_uri' => $result['user_uri']];
-                }
-            }
-
-            throw new Exception("Could not sign in with Facebook", 403);
+            throw new Exception("Unexpected Facebook error", Http::INTERNAL_SERVER_ERROR);
         }
 
-        trigger_error(
-            sprintf(
-                'Unexpected Facebook error (%s: %s)',
-                $res->getStatusCode(),
-                $res->getBody()
-            ),
-            E_USER_WARNING
+        $data         = json_decode((string) $res->getBody(), true);
+        $access_token = $data['access_token'];
+
+        // retrieve email address from Facebook profile
+        $res = $client->get('https://graph.facebook.com/me', [
+            'query' => [
+                'access_token' => $access_token,
+                'fields'       => 'name,email',
+            ]
+        ]);
+
+        if (!$res->getStatusCode() == Http::OK) {
+            throw new Exception("Could not sign in with Facebook", Http::FORBIDDEN);
+        }
+
+        $data = json_decode((string) $res->getBody(), true, 512, JSON_BIGINT_AS_STRING);
+
+        if (!array_key_exists('email', $data)) {
+            throw new Exception("Email address is unavailable", Http::FORBIDDEN);
+        }
+        $email    = $data['email'];
+        $fullName = $data['name'];
+        $id       = $data['id'];
+
+        $result = $this->oauthModel->createAccessTokenFromTrustedEmail(
+            $clientId,
+            $email,
+            $fullName,
+            $id
         );
-        throw new Exception("Unexpected Facebook error", 500);
+
+        if (!$result) {
+            throw new Exception("Could not sign in with Facebook", Http::FORBIDDEN);
+        }
+
+        return ['access_token' => $result['access_token'], 'user_uri' => $result['user_uri']];
     }
 }

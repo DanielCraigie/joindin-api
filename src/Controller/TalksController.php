@@ -13,7 +13,7 @@ use Joindin\Api\Model\TalkCommentMapper;
 use Joindin\Api\Model\TalkMapper;
 use Joindin\Api\Model\TalkModelCollection;
 use Joindin\Api\Model\TalkTypeMapper;
-use Joindin\Api\Service\SpamCheckService;
+use Joindin\Api\Service\SpamCheckServiceInterface;
 use Joindin\Api\Service\TalkAssignEmailService;
 use Joindin\Api\Service\TalkClaimApprovedEmailService;
 use Joindin\Api\Service\TalkClaimEmailService;
@@ -21,6 +21,8 @@ use Joindin\Api\Service\TalkClaimRejectedEmailService;
 use Joindin\Api\Service\TalkCommentEmailService;
 use PDO;
 use Joindin\Api\Request;
+use Teapot\StatusCode\Http;
+use Teapot\StatusCode\WebDAV;
 
 class TalksController extends BaseTalkController
 {
@@ -28,6 +30,14 @@ class TalksController extends BaseTalkController
      * @var PendingTalkClaimMapper
      */
     private $pending_talk_claim_mapper;
+    private $spamCheckService;
+
+    public function __construct(SpamCheckServiceInterface $spamCheckService, array $config = [])
+    {
+        parent::__construct($config);
+
+        $this->spamCheckService = $spamCheckService;
+    }
 
     public function getAction(Request $request, PDO $db)
     {
@@ -72,7 +82,7 @@ class TalksController extends BaseTalkController
     public function getTalkByKeyWord(Request $request, PDO $db)
     {
         if (!isset($request->parameters['title'])) {
-            throw new Exception('Generic talks listing not supported', 405);
+            throw new Exception('Generic talks listing not supported', Http::METHOD_NOT_ALLOWED);
         }
 
         $this->setDbAndRequest($db, $request);
@@ -107,13 +117,15 @@ class TalksController extends BaseTalkController
             switch ($request->url_elements[4]) {
                 case "comments":
                     $comment = $request->getParameter('comment');
+
                     if (empty($comment)) {
-                        throw new Exception('The field "comment" is required', 400);
+                        throw new Exception('The field "comment" is required', Http::BAD_REQUEST);
                     }
 
                     $rating = $request->getParameter('rating');
+
                     if (empty($rating)) {
-                        throw new Exception('The field "rating" is required', 400);
+                        throw new Exception('The field "rating" is required', Http::BAD_REQUEST);
                     }
 
                     $private = ($request->getParameter('private') ? 1 : 0);
@@ -134,26 +146,21 @@ class TalksController extends BaseTalkController
                     $data['source']  = $consumer_name;
 
                     try {
-                        // run it by akismet if we have it
-                        if (isset($this->config['akismet']['apiKey'], $this->config['akismet']['blog'])) {
-                            $spamCheckService = new SpamCheckService(
-                                $this->config['akismet']['apiKey'],
-                                $this->config['akismet']['blog']
-                            );
-                            $isValid          = $spamCheckService->isCommentAcceptable(
-                                $data,
-                                $request->getClientIP(),
-                                $request->getClientUserAgent()
-                            );
-                            if (!$isValid) {
-                                throw new Exception("Comment failed spam check", 400);
-                            }
+                        $isValid = $this->spamCheckService->isCommentAcceptable(
+                            $comment,
+                            $request->getClientIP(),
+                            $request->getClientUserAgent()
+                        );
+
+                        if (!$isValid) {
+                            throw new Exception("Comment failed spam check", Http::BAD_REQUEST);
                         }
 
                         // should rating be allowed?
                         if ($comment_mapper->hasUserRatedThisTalk($data['user_id'], $data['talk_id'])) {
                             $data['rating'] = 0;
                         }
+
                         if ($talk_mapper->isUserASpeakerOnTalk($data['talk_id'], $data['user_id'])) {
                             // speakers cannot cannot rate their own talk
                             $data['rating'] = 0;
@@ -162,7 +169,7 @@ class TalksController extends BaseTalkController
                         $new_id = $comment_mapper->save($data);
                     } catch (Exception $e) {
                         // just throw this again but with a 400 status code
-                        throw new Exception($e->getMessage(), 400);
+                        throw new Exception($e->getMessage(), Http::BAD_REQUEST);
                     }
 
                     if ($new_id) {
@@ -184,13 +191,12 @@ class TalksController extends BaseTalkController
 
                         $view = $request->getView();
                         $view->setHeader('Location', $uri);
-                        $view->setResponseCode(201);
+                        $view->setResponseCode(Http::CREATED);
 
                         return;
-                    } else {
-                        throw new Exception("The comment could not be stored", 400);
                     }
-                    break;
+
+                    throw new Exception("The comment could not be stored", Http::BAD_REQUEST);
                 case 'starred':
                     // the body of this request is completely irrelevant
                     // The logged in user *is* attending the talk.  Use DELETE to unattend
@@ -199,11 +205,12 @@ class TalksController extends BaseTalkController
 
                     $view = $request->getView();
                     $view->setHeader('Location', $request->base . $request->path_info);
-                    $view->setResponseCode(201);
+                    $view->setResponseCode(Http::CREATED);
 
                     return;
+
                 default:
-                    throw new Exception("Operation not supported, sorry", 404);
+                    throw new Exception("Operation not supported, sorry", Http::NOT_FOUND);
             }
         } else {
             throw new Exception("method not supported - sorry");
@@ -220,7 +227,7 @@ class TalksController extends BaseTalkController
 
         $view = $request->getView();
         $view->setHeader('Content-Length', 0);
-        $view->setResponseCode(205);
+        $view->setResponseCode(Http::RESET_CONTENT);
     }
 
     public function deleteTalk(Request $request, PDO $db)
@@ -231,9 +238,10 @@ class TalksController extends BaseTalkController
         $talk_mapper = $this->getTalkMapper($db, $request);
 
         $talk = $talk_mapper->getTalkById($talk_id);
+
         if ($talk) {
             if (!($talk_mapper->thisUserHasAdminOn($talk_id))) {
-                throw new Exception("You do not have permission to do that", 400);
+                throw new Exception("You do not have permission to do that", Http::BAD_REQUEST);
             }
 
             $talk_mapper->delete($talk_id);
@@ -241,7 +249,7 @@ class TalksController extends BaseTalkController
 
         $view = $request->getView();
         $view->setHeader('Content-Length', 0);
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
     }
 
     /**
@@ -260,7 +268,7 @@ class TalksController extends BaseTalkController
         } catch (Exception $e) {
             // throw again with a 400 status, This should be removed for consistency
             // but will break backwards compatibility
-            throw new Exception($e->getMessage(), 400);
+            throw new Exception($e->getMessage(), Http::BAD_REQUEST);
         }
 
         $talk_mapper = new TalkMapper($db, $request);
@@ -269,26 +277,30 @@ class TalksController extends BaseTalkController
 
         $is_admin   = $talk_mapper->thisUserHasAdminOn($talk_id);
         $is_speaker = $talk_mapper->isUserASpeakerOnTalk($talk_id, $request->user_id);
+
         if (!($is_admin || $is_speaker)) {
-            throw new Exception("You do not have permission to add this talk to a track", 400);
+            throw new Exception("You do not have permission to add this talk to a track", Http::BAD_REQUEST);
         }
 
         $track_uri = $request->getParameter("track_uri");
         $pattern   = '@/' . $request->version . '/tracks/([\d]+)$@';
+
         if (!preg_match($pattern, $track_uri, $matches)) {
-            throw new Exception('Invalid track_uri', 400);
+            throw new Exception('Invalid track_uri', Http::BAD_REQUEST);
         }
         $track_id = $matches[1];
 
         // is this track on this event?
         $event_mapper = new EventMapper($db, $request);
         $track_events = $event_mapper->getEventByTrackId($track_id, true, false, false);
+
         if (!$track_events || ! $track_events[0]['ID']) {
-            throw new Exception("Associated event not found", 400);
+            throw new Exception("Associated event not found", Http::BAD_REQUEST);
         }
         $track_event_id = $track_events[0]['ID'];
+
         if ($talk->event_id != $track_event_id) {
-            throw new Exception("This talk cannot be added to this track", 400);
+            throw new Exception("This talk cannot be added to this track", Http::BAD_REQUEST);
         }
 
         // add talk to track
@@ -298,7 +310,7 @@ class TalksController extends BaseTalkController
 
         $view = $request->getView();
         $view->setHeader('Location', $uri);
-        $view->setResponseCode(201);
+        $view->setResponseCode(Http::CREATED);
     }
 
     /**
@@ -316,7 +328,7 @@ class TalksController extends BaseTalkController
         } catch (Exception $e) {
             // throw again with a 400 status, This should be removed for consistency
             // but will break backwards compatibility
-            throw new Exception($e->getMessage(), 400);
+            throw new Exception($e->getMessage(), Http::BAD_REQUEST);
         }
 
         $track_id = $request->url_elements[5];
@@ -327,19 +339,22 @@ class TalksController extends BaseTalkController
 
         $is_admin   = $talk_mapper->thisUserHasAdminOn($talk_id);
         $is_speaker = $talk_mapper->isUserASpeakerOnTalk($talk_id, $request->user_id);
+
         if (!($is_admin || $is_speaker)) {
-            throw new Exception("You do not have permission to remove this talk from this track", 400);
+            throw new Exception("You do not have permission to remove this talk from this track", Http::BAD_REQUEST);
         }
 
         // is this track on this event?
         $event_mapper = new EventMapper($db, $request);
         $track_events = $event_mapper->getEventByTrackId($track_id, true, false, false);
+
         if (!$track_events || ! $track_events[0]['ID']) {
-            throw new Exception("Associated event not found", 400);
+            throw new Exception("Associated event not found", Http::BAD_REQUEST);
         }
         $track_event_id = $track_events[0]['ID'];
+
         if ($talk->event_id != $track_event_id) {
-            throw new Exception("This talk cannot be added to this track", 400);
+            throw new Exception("This talk cannot be added to this track", Http::BAD_REQUEST);
         }
 
         // delete track from talk
@@ -349,7 +364,7 @@ class TalksController extends BaseTalkController
 
         $view = $request->getView();
         $view->setHeader('Location', $uri);
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
     }
 
     /**
@@ -368,10 +383,11 @@ class TalksController extends BaseTalkController
     {
         $this->checkLoggedIn($request);
         $event_id = $this->getItemId($request);
+
         if (empty($event_id)) {
             throw new Exception(
                 "POST expects a talk representation sent to a specific event URL",
-                400
+                Http::BAD_REQUEST
             );
         }
 
@@ -379,8 +395,9 @@ class TalksController extends BaseTalkController
         $talk_mapper  = new TalkMapper($db, $request);
 
         $is_admin = $event_mapper->thisUserHasAdminOn($event_id);
+
         if (!$is_admin) {
-            throw new Exception("You do not have permission to add talks to this event", 400);
+            throw new Exception("You do not have permission to add talks to this event", Http::BAD_REQUEST);
         }
 
         // retrieve the talk data from the request
@@ -402,7 +419,7 @@ class TalksController extends BaseTalkController
         $event_mapper->cacheTalkCount($event_id);
 
         $uri = $request->base . '/' . $request->version . '/talks/' . $new_id;
-        $request->getView()->setResponseCode(201);
+        $request->getView()->setResponseCode(Http::CREATED);
         $request->getView()->setHeader('Location', $uri);
 
         $new_talk   = $this->getTalkById($request, $db, $new_id);
@@ -434,8 +451,9 @@ class TalksController extends BaseTalkController
 
         $is_admin   = $talk_mapper->thisUserHasAdminOn($talk_id);
         $is_speaker = $talk_mapper->isUserASpeakerOnTalk($talk_id, $request->user_id);
+
         if (!($is_admin || $is_speaker)) {
-            throw new Exception("You do not have permission to update this talk", 403);
+            throw new Exception("You do not have permission to update this talk", Http::FORBIDDEN);
         }
 
         // retrieve the talk data from the request
@@ -446,7 +464,7 @@ class TalksController extends BaseTalkController
 
         $view = $request->getView();
         $view->setHeader('Location', $request->base . $request->path_info);
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
     }
 
     /**
@@ -467,8 +485,9 @@ class TalksController extends BaseTalkController
         // get the event so we can get the timezone info & it
         $event_mapper = new EventMapper($db, $request);
         $list         = $event_mapper->getEventById($event_id, true);
+
         if (count($list['events']) == 0) {
-            throw new Exception('Event not found', 404);
+            throw new Exception('Event not found', Http::NOT_FOUND);
         }
         $event = $list['events'][0];
 
@@ -477,8 +496,9 @@ class TalksController extends BaseTalkController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($talk['title'])) {
-            throw new Exception("The talk title field is required", 400);
+            throw new Exception("The talk title field is required", Http::BAD_REQUEST);
         }
 
         $talk['description'] = filter_var(
@@ -486,8 +506,9 @@ class TalksController extends BaseTalkController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($talk['description'])) {
-            throw new Exception("The talk description field is required", 400);
+            throw new Exception("The talk description field is required", Http::BAD_REQUEST);
         }
 
         $talk['type'] = filter_var(
@@ -498,8 +519,9 @@ class TalksController extends BaseTalkController
 
         $talk_type_mapper = new TalkTypeMapper($db, $request);
         $talk_types       = $talk_type_mapper->getTalkTypesLookupList();
+
         if (!array_key_exists($talk['type'], $talk_types)) {
-            throw new Exception("The type '{$talk['type']}' is unknown", 400);
+            throw new Exception("The type '{$talk['type']}' is unknown", Http::BAD_REQUEST);
         }
         $talk['type_id'] = $talk_types[$talk['type']];
 
@@ -508,16 +530,18 @@ class TalksController extends BaseTalkController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($start_date)) {
-            throw new Exception("Please give the date and time of the talk", 400);
+            throw new Exception("Please give the date and time of the talk", Http::BAD_REQUEST);
         }
         $tz           = new DateTimeZone($event['tz_continent'] . '/' . $event['tz_place']);
         $talk['date'] = (new DateTime($start_date, $tz))->format('U');
 
         $event_start_date = (new DateTime($event['start_date']))->format('U');
         $event_end_date   = (new DateTime($event['end_date']))->add(new DateInterval('P1D'))->format('U');
+
         if ($talk['date'] < $event_start_date || $talk['date'] >= $event_end_date) {
-            throw new Exception("The talk must be held between the start and end date of the event", 400);
+            throw new Exception("The talk must be held between the start and end date of the event", Http::BAD_REQUEST);
         }
 
         $talk['language'] = filter_var(
@@ -525,20 +549,23 @@ class TalksController extends BaseTalkController
             FILTER_SANITIZE_STRING,
             FILTER_FLAG_NO_ENCODE_QUOTES
         );
+
         if (empty($talk['language'])) {
             // default to UK English
             $talk['language'] = 'English - UK';
         }
         // When the language doesn't exist, the talk will not be found
         $language_mapper = new LanguageMapper($db, $request);
+
         if (!$language_mapper->isLanguageValid($talk['language'])) {
-            throw new Exception("The language '{$talk['language']}' is unknown", 400);
+            throw new Exception("The language '{$talk['language']}' is unknown", Http::BAD_REQUEST);
         }
 
         $talk['duration'] = filter_var(
             $request->getParameter('duration'),
             FILTER_SANITIZE_NUMBER_INT
         );
+
         if (empty($talk['duration'])) {
             $talk['duration'] = 60;
         }
@@ -549,13 +576,13 @@ class TalksController extends BaseTalkController
         );
 
         $talk['speakers'] = array_map(
-            function ($speaker) {
+            static function ($speaker) {
                 $speaker = filter_var($speaker, FILTER_SANITIZE_STRING, FILTER_FLAG_NO_ENCODE_QUOTES);
                 $speaker = trim($speaker);
 
                 return $speaker;
             },
-            (array)$request->getParameter('speakers')
+            (array) $request->getParameter('speakers')
         );
 
         return $talk;
@@ -588,7 +615,7 @@ class TalksController extends BaseTalkController
         $data = $this->getLinkUserDataFromRequest($request);
 
         if ($data['display_name'] === '' || $data['username'] === '') {
-            throw new Exception("You must provide a display name and a username", 400);
+            throw new Exception("You must provide a display name and a username", Http::BAD_REQUEST);
         }
 
         //Get the speaker record based on the display name - check if this is already claimed,
@@ -597,21 +624,23 @@ class TalksController extends BaseTalkController
         $claim = $talk_mapper->getSpeakerFromTalk($talk_id, $data['display_name']);
 
         if ($claim === false) {
-            throw new Exception("No speaker matching that name found", 422);
+            throw new Exception("No speaker matching that name found", WebDAV::UNPROCESSABLE_ENTITY);
         }
 
         if ($claim['speaker_id'] != null && $claim['speaker_id'] != 0) {
-            throw new Exception("Talk already claimed", 422);
+            throw new Exception("Talk already claimed", WebDAV::UNPROCESSABLE_ENTITY);
         }
 
         $speaker_id = $user_mapper->getUserIdFromUsername($data['username']);
+
         if (!$speaker_id) {
-            throw new Exception("Specified user not found", 404);
+            throw new Exception("Specified user not found", Http::NOT_FOUND);
         }
         $speaker_name = $user_mapper->getUserById($speaker_id)['users'][0]['full_name'];
 
         $pending_talk_claim_mapper = $this->getPendingTalkClaimMapper($db, $request);
         $claim_exists              = $pending_talk_claim_mapper->claimExists($talk_id, $speaker_id, $claim['ID']);
+
         if ($claim_exists === false) {
             //This is a new claim
             //Is the speaker this user?
@@ -620,6 +649,7 @@ class TalksController extends BaseTalkController
                 //We need to send an email to the host asking for confirmation
                 $recipients   = $event_mapper->getHostsEmailAddresses($event_id);
                 $emailService = new TalkClaimEmailService($this->config, $recipients, $event, $talk);
+
                 if (!defined('UNIT_TEST')) {
                     $emailService->sendEmail();
                 }
@@ -629,11 +659,12 @@ class TalksController extends BaseTalkController
                 $recipients   = [$user_mapper->getEmailByUserId($speaker_id)];
                 $username     = $data['username'];
                 $emailService = new TalkAssignEmailService($this->config, $recipients, $event, $talk, $username);
+
                 if (!defined('UNIT_TEST')) {
                     $emailService->sendEmail();
                 }
             } else {
-                throw new Exception("You must be the speaker or event admin to link a user to a talk", 401);
+                throw new Exception("You must be the speaker or event admin to link a user to a talk", Http::UNAUTHORIZED);
             }
         } elseif ($claim_exists === PendingTalkClaimMapper::SPEAKER_CLAIM) {
             //The host needs to approve
@@ -649,7 +680,7 @@ class TalksController extends BaseTalkController
                 $event_mapper->setUserAttendance($event_id, $speaker_id);
 
                 if (!$success) {
-                    throw new Exception("There was a problem assigning the talk", 500);
+                    throw new Exception("There was a problem assigning the talk", Http::INTERNAL_SERVER_ERROR);
                 }
 
                 if (!defined('UNIT_TEST')) {
@@ -658,30 +689,31 @@ class TalksController extends BaseTalkController
             } else {
                 if ($speaker_id == $request->getUserId()) {
                     throw new Exception("You already have a pending claim for this talk. " .
-                                        "Please wait for an event admin to approve your claim.", 401);
+                                        "Please wait for an event admin to approve your claim.", Http::UNAUTHORIZED);
                 }
-                throw new Exception("You must be an event admin to approve this claim", 401);
+
+                throw new Exception("You must be an event admin to approve this claim", Http::UNAUTHORIZED);
             }
         } elseif ($claim_exists === PendingTalkClaimMapper::HOST_ASSIGN) {
             //The speaker needs to approve
             if ($data['username'] === $user['username']) {
                 if ($pending_talk_claim_mapper->approveAssignmentAsSpeaker($talk_id, $user_id, $claim['ID'])) {
                     if (!$talk_mapper->assignTalkToSpeaker($talk_id, $claim['ID'], $speaker_id, $speaker_name)) {
-                        throw new Exception("There was a problem assigning the talk", 500);
+                        throw new Exception("There was a problem assigning the talk", Http::INTERNAL_SERVER_ERROR);
                     }
 
                     $event_mapper->setUserAttendance($event_id, $speaker_id);
                 } else {
-                    throw new Exception("There was a problem assigning the talk", 500);
+                    throw new Exception("There was a problem assigning the talk", Http::INTERNAL_SERVER_ERROR);
                 }
             } else {
-                throw new Exception("You must be the talk speaker to approve this assignment", 401);
+                throw new Exception("You must be the talk speaker to approve this assignment", Http::UNAUTHORIZED);
             }
         }
 
         $view = $request->getView();
         $view->setHeader('Location', $request->base . $request->path_info);
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
     }
 
     private function getLinkUserDataFromRequest(Request $request)
@@ -716,14 +748,16 @@ class TalksController extends BaseTalkController
         $talk        = $this->getTalkById($request, $db, $talk_id);
 
         $speaker = $talk_mapper->isUserASpeakerOnTalk($talk_id, $speaker_id);
+
         if (!$speaker) {
-            throw new Exception("Provided user is not a speaker on this talk", 404);
+            throw new Exception("Provided user is not a speaker on this talk", Http::NOT_FOUND);
         }
 
         $is_admin   = $talk_mapper->thisUserHasAdminOn($talk_id);
         $is_speaker = $talk_mapper->isUserASpeakerOnTalk($talk_id, $request->user_id);
+
         if (!($is_admin || $is_speaker)) {
-            throw new Exception("You do not have permission to remove this speaker from this talk", 403);
+            throw new Exception("You do not have permission to remove this speaker from this talk", Http::FORBIDDEN);
         }
 
         // delete speaker from talk
@@ -733,7 +767,7 @@ class TalksController extends BaseTalkController
 
         $view = $request->getView();
         $view->setHeader('Location', $uri);
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
     }
 
     public function getTalkCommentEmailService($config, $recipients, $talk, $comment)
@@ -753,49 +787,51 @@ class TalksController extends BaseTalkController
         $event        = $event_mapper->getEventById($event_id);
 
         $is_admin = $talk_mapper->thisUserHasAdminOn($talk_id);
+
         if (!($is_admin)) {
-            throw new Exception("You do not have permission to reject the speaker claim on this talk", 403);
+            throw new Exception("You do not have permission to reject the speaker claim on this talk", Http::FORBIDDEN);
         }
 
         $data = $this->getLinkUserDataFromRequest($request);
 
         $user_mapper = $this->getUserMapper($db, $request);
         $speaker_id  = $user_mapper->getUserIdFromUsername($data['username']);
+
         if (!$speaker_id) {
-            throw new Exception("Specified user not found", 404);
+            throw new Exception("Specified user not found", Http::NOT_FOUND);
         }
 
         $claim = $talk_mapper->getSpeakerFromTalk($talk_id, $data['display_name']);
 
         if ($claim === false) {
-            throw new Exception("No speaker matching that name found", 422);
+            throw new Exception("No speaker matching that name found", WebDAV::UNPROCESSABLE_ENTITY);
         }
 
         if ($claim['speaker_id'] != null && $claim['speaker_id'] != 0) {
-            throw new Exception("Talk already claimed", 422);
+            throw new Exception("Talk already claimed", WebDAV::UNPROCESSABLE_ENTITY);
         }
 
         if ($data['display_name'] === '' || $data['username'] === '') {
-            throw new Exception("You must provide a display name and a username", 400);
+            throw new Exception("You must provide a display name and a username", Http::BAD_REQUEST);
         }
 
         $pending_talk_claim_mapper = $this->getPendingTalkClaimMapper($db, $request);
         $claim_exists              = $pending_talk_claim_mapper->claimExists($talk_id, $speaker_id, $claim['ID']);
 
         if ($claim_exists !== PendingTalkClaimMapper::SPEAKER_CLAIM) {
-            throw new Exception("There was a problem with the claim", 500);
+            throw new Exception("There was a problem with the claim", Http::INTERNAL_SERVER_ERROR);
         }
         $method     = $this->getRequestParameter($request, 'action', 'approve');
         $recipients = [$user_mapper->getEmailByUserId($speaker_id)];
 
-
         $success = $pending_talk_claim_mapper->rejectClaimAsHost($talk_id, $speaker_id, $claim['ID']);
 
         if (!$success) {
-            throw new Exception("There was a problem assigning the talk", 500);
+            throw new Exception("There was a problem assigning the talk", Http::INTERNAL_SERVER_ERROR);
         }
 
         $emailService = new TalkClaimRejectedEmailService($this->config, $recipients, $event, $talk);
+
         if (!defined('UNIT_TEST')) {
             $emailService->sendEmail();
         }
@@ -804,7 +840,7 @@ class TalksController extends BaseTalkController
 
         $view = $request->getView();
         $view->setHeader('Location', $uri);
-        $view->setResponseCode(204);
+        $view->setResponseCode(Http::NO_CONTENT);
 
         return true;
     }

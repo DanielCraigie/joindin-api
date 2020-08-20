@@ -1,5 +1,8 @@
 # joindin-api
 
+[![CI Status](https://github.com/joindin/joindin-api/workflows/Continuous%20Integration/badge.svg)](https://github.com/joindin/joindin-api/actions)
+[![codecov](https://codecov.io/gh/joindin/joindin-api/branch/master/graph/badge.svg)](https://codecov.io/gh/joindin/joindin-api)
+
 This is the API behind the joind.in website (the new version of it), the mobile applications, and many other consumers.  This project is a dependency for the majority of the other projects under the joind.in organization https://github.com/joindin
 
 ### Welcome
@@ -100,27 +103,14 @@ Patches can be applied using either of the two patchdb scripts (PHP/Shell) in th
 
 Please do your best to ensure that any code you contributed adheres to the
 Joind.in coding style -- this is the PSR-2 coding standard with no namespaces.
-You can run php codesniffer on an individual file like so:
 
-```bash
-vendor/bin/phpcs path/of/filename.php
+Run
+
+```
+$ composer cs
 ```
 
-This will run codesniffer on any file within the regular source for Joind.in or the
-API-v2 source. Wildcards work as does specifying part of the path in case the
-filename alone results in sniffing more files than you wanted.
-
-To see the codesniff errors and warnings across the entire project, run
-
-```bash
-composer sniff
-```
-
-To see a summary of the codesniff errors and warnings across the entire project, run
-
-```bash
-composer sniff -- --report=summary
-```
+to fix coding style issues.
 
 #### Inline Documentation
 
@@ -141,19 +131,19 @@ Docs are written in markdown and rendered by [Jekyll](http://jekyllrb.com/), a r
 
 ## Global .gitignore
 
-git has the capability to define a global gitignore file , which means you can 
-set up rules on your machine to ignore everything you don't want to include in 
+git has the capability to define a global gitignore file , which means you can
+set up rules on your machine to ignore everything you don't want to include in
 your commits. This works not only for this project, but for all your other
 projects too.
 
-You can define the gitignore file with a command that looks like this, where the 
-last argument is the file that holds the patterns to ignore: 
+You can define the gitignore file with a command that looks like this, where the
+last argument is the file that holds the patterns to ignore:
 
 ```bash
 git config --global core.excludesfile ~/.gitignore_global
 ```
 
-Octocat gives [a good starting point](https://gist.github.com/octocat/9257657) for 
+Octocat gives [a good starting point](https://gist.github.com/octocat/9257657) for
 what to include, but you can also ignore the files used by your editor:
 
     # Eclipse

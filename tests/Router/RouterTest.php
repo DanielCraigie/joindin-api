@@ -9,9 +9,8 @@ use PHPUnit\Framework\TestCase;
  *
  * @covers \Joindin\Api\Router\BaseRouter
  */
-class RouterTest extends TestCase
+final class RouterTest extends TestCase
 {
-
     /**
      * DataProvider for testConstruct
      *

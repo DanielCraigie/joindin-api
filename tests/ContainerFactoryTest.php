@@ -9,7 +9,7 @@ use Joindin\Api\Service\SpamCheckServiceInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
-class ContainerFactoryTest extends TestCase
+final class ContainerFactoryTest extends TestCase
 {
     private $config = [
         'akismet' => [
@@ -80,7 +80,7 @@ class ContainerFactoryTest extends TestCase
             [Service\ContactEmailService::class],
             [Controller\ApplicationsController::class],
             [Controller\DefaultController::class],
-            [Controller\EmailsController::class] ,
+            [Controller\EmailsController::class],
             [Controller\EventCommentsController::class],
             [Controller\EventHostsController::class],
             [Controller\EventImagesController::class],
